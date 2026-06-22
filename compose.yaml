@@ -1,0 +1,59 @@
+services:
+    firebase-emulator:
+        build:
+            context: ./firebase-emulator
+        image: tolo-firebase-emulator
+        ports:
+            - "8080:8080" # Firestore
+            - "4000:4000" # Emulator UI
+
+    signaling:
+        build:
+            context: ./signaling
+        image: tolo-signaling
+        ports:
+            - "8787:8787"
+        environment:
+            SIGNALING_ADDR: ":8787"
+            FIRESTORE_PROJECT_ID: demo-tolo
+            FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
+        depends_on:
+            - firebase-emulator
+
+    web:
+        build:
+            context: ./web
+            target: dev
+            secrets:
+                - npm_token
+        image: tolo-web-dev
+        ports:
+            - "3000:3000"
+        environment:
+            NODE_ENV: development
+            NEXT_TELEMETRY_DISABLED: "1"
+            WATCHPACK_POLLING: "true"
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-tolo
+            NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+            SIGNALING_URL: http://signaling:8787
+        depends_on:
+            - firebase-emulator
+            - signaling
+        develop:
+            watch:
+                - action: sync
+                  path: ./web
+                  target: /app
+                  ignore:
+                      - node_modules/
+                      - .next/
+                      - .git/
+                      - .env
+                - action: rebuild
+                  path: ./web/package.json
+                - action: rebuild
+                  path: ./web/pnpm-lock.yaml
+
+secrets:
+    npm_token:
+        environment: NPM_TOKEN
