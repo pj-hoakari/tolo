@@ -1,0 +1,6 @@
+[submodule "web"]
+	path = web
+	url = https://github.com/pj-hoakari/tolo-web.git
+[submodule "signaling"]
+	path = signaling
+	url = https://github.com/pj-hoakari/tolo-signaling.git
