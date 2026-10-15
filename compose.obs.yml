@@ -1,0 +1,71 @@
+services:
+    server:
+        networks:
+            - observation
+
+    observation:
+        image: ${TOLO_OBS_IMAGE:-tolo-observation:f3099df}
+        build:
+            context: https://github.com/pj-hoakari/tolo-observation.git#f3099df6a293dfa6a40a77c382eabea55a02a8bc
+        environment:
+            SERVER_ADDR: :8080
+            DATABASE_URL: postgres://observation-db:5432/observation?sslmode=disable&user=observation&password=${TOLO_OBS_DB_PASSWORD:-observation}
+            OBSERVATION_PAGE_URL_TEMPLATE: http://{tenant_id}.localhost:3000/event/{event_id}/observation/{edge_device_id}
+            INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
+            INTERNAL_JWT_ISSUER: service-gateway
+            INTERNAL_JWT_AUDIENCE: tolo-observation
+            GRAPH_AUTHORING_URL: http://server:8090
+            FLOW_CONTROL_URL: http://flow-control:8080
+        networks:
+            - observation
+            - observation-db
+            - flow-control
+        depends_on:
+            observation-migrate:
+                condition: service_completed_successfully
+            server:
+                condition: service_started
+
+    observation-migrate:
+        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:f3099df}
+        build:
+            context: https://github.com/pj-hoakari/tolo-observation.git#f3099df6a293dfa6a40a77c382eabea55a02a8bc
+            target: migrate
+        command:
+            - -database
+            - postgres://observation-db:5432/observation?sslmode=disable&user=observation&password=${TOLO_OBS_DB_PASSWORD:-observation}
+            - up
+        networks:
+            - observation-db
+        depends_on:
+            observation-db:
+                condition: service_healthy
+        restart: "no"
+
+    observation-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: observation
+            POSTGRES_USER: observation
+            POSTGRES_PASSWORD: ${TOLO_OBS_DB_PASSWORD:-observation}
+        networks:
+            - observation-db
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+        volumes:
+            - observation-data:/var/lib/postgresql
+
+volumes:
+    observation-data:
+
+networks:
+    observation:
+        internal: true
+    observation-db:
+        internal: true
+    flow-control:
+        internal: true

@@ -1,0 +1,83 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+dotenv: [".env"]
+
+env:
+    COMPOSE_FILE:
+        sh: echo "${COMPOSE_FILE:-compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.flow.yml:compose.edge.yml:compose.web.yml}"
+    TOLO_TENANT_ID:
+        sh: echo "${TOLO_TENANT_ID:-0123456789abcdef}"
+    TOLO_EVENT_ID:
+        sh: echo "${TOLO_EVENT_ID:-fedcba9876543210}"
+    TOLO_OWNER_SUB:
+        sh: echo "${TOLO_OWNER_SUB:-user-owner}"
+
+vars:
+    FAKEIDP_IMAGE: tolo-fakeidp:2f92e01
+    FAKEIDP_CONTEXT: https://github.com/pj-hoakari/tolo-service-gateway.git#2f92e0167d56fa03b8e18851b6ff2e26ce2320f7
+    TOKEN_TTL_SECONDS: "86400"
+
+tasks:
+    up:
+        desc: Start the services listed in COMPOSE_FILE.
+        cmds:
+            - docker compose up -d --wait {{.CLI_ARGS}}
+
+    down:
+        desc: Stop the services. Pass -- -v to also delete the volumes.
+        cmds:
+            - docker compose down {{.CLI_ARGS}}
+
+    fakeidp:up:
+        desc: Start the fake IdP outside Compose. Run after `task up`.
+        cmds:
+            - docker build -q -t {{.FAKEIDP_IMAGE}} --target fakeidp {{.FAKEIDP_CONTEXT}}
+            - >-
+              docker run -d --rm --name tolo-fakeidp
+              --network tolo-idp --network-alias fakeidp
+              -p 8082:8080
+              -v tolo-idp-introspection:/etc/tolo/idp:ro
+              -e SERVER_ADDR=:8080
+              -e FAKE_IDP_ISSUER=http://fakeidp:8080
+              -e FAKE_IDP_AUDIENCE=backend-api
+              -e FAKE_IDP_INTROSPECTION_CLIENT_ID=gateway-introspection
+              -e FAKE_IDP_INTROSPECTION_CLIENT_SECRET_FILE=/etc/tolo/idp/introspection-client-secret
+              {{.FAKEIDP_IMAGE}}
+
+    fakeidp:down:
+        desc: Stop the fake IdP. The tokens it issued become invalid.
+        cmds:
+            - docker stop tolo-fakeidp
+
+    tokens:
+        desc: Print the web tokens for the fixed tenant and event as .env lines.
+        silent: true
+        cmds:
+            - >-
+              echo "TENANT_ACCESS_TOKEN=$(./scripts/fakeidp-token.sh -k tenant_access
+              -b "$TOLO_OWNER_SUB" -t "$TOLO_TENANT_ID"
+              -s 'tenant.read tenant.write events.read events.manage' -l {{.TOKEN_TTL_SECONDS}})"
+            - >-
+              echo "GRAPH_ACCESS_TOKEN=$(./scripts/fakeidp-token.sh -k event_access
+              -b "$TOLO_OWNER_SUB" -c console-ui -t "$TOLO_TENANT_ID" -e "$TOLO_EVENT_ID"
+              -s 'events.read events.manage events.operate' -l {{.TOKEN_TTL_SECONDS}})"
+            - >-
+              echo "OBSERVATION_ACCESS_TOKEN=$(./scripts/fakeidp-token.sh -k event_access
+              -b dev-edge -c edge-page -t "$TOLO_TENANT_ID" -e "$TOLO_EVENT_ID"
+              -s 'events.read events.report' -l {{.TOKEN_TTL_SECONDS}})"
+
+    e2e:
+        desc: Run the cross-service checks against the running services.
+        cmds:
+            - ./scripts/tenant-management-onboarding.sh
+            - ./scripts/graph-authoring-event-check.sh
+            - ./scripts/observation-measurement-check.sh
+            - ./scripts/compose-reachability-check.sh
+            - ./scripts/gateway-log-token-check.sh
+
+    proposal:
+        desc: Report measurements until Flow Control stores a detour proposal.
+        cmds:
+            - docker compose --profile runn run --rm runn

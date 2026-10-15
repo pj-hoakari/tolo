@@ -1,0 +1,61 @@
+name: tolo
+
+services:
+    keygen:
+        image: alpine/openssl:3.5.8@sha256:3f25da71f70eba788067daac3f3df03bd1de7a7c52ed89fa93b94ad2c92d986b
+        entrypoint: ["/bin/sh", "-c"]
+        command:
+            - |
+              set -eu
+              if [ ! -f /keys/signing-key.pem ]; then
+                openssl ecparam -name prime256v1 -genkey -noout -out /keys/signing-key.pem
+                chown 65532:65532 /keys/signing-key.pem
+                chmod 0400 /keys/signing-key.pem
+              fi
+              if [ ! -f /idp/introspection-client-secret ]; then
+                openssl rand -hex 16 > /idp/introspection-client-secret
+                chown 65532:65532 /idp/introspection-client-secret
+                chmod 0400 /idp/introspection-client-secret
+              fi
+        volumes:
+            - internal-jwt-keys:/keys
+            - idp-introspection:/idp
+        restart: "no"
+
+    server:
+        image: ${TOLO_GATEWAY_IMAGE:-tolo-service-gateway:2f92e01}
+        build:
+            context: https://github.com/pj-hoakari/tolo-service-gateway.git#2f92e0167d56fa03b8e18851b6ff2e26ce2320f7
+            target: server
+        environment:
+            TOLO_GATEWAY_LISTENER_MODE: split
+            TOLO_GATEWAY_PUBLIC_PORT: "8080"
+            TOLO_GATEWAY_INTERNAL_PORT: "8090"
+            INTERNAL_JWT_ISSUER: service-gateway
+            INTERNAL_JWT_SIGNING_KEY_FILE: /etc/tolo/keys/signing-key.pem
+            INTERNAL_JWT_SIGNING_KEY_ID: dev-key-1
+            TOLO_GATEWAY_DESTINATIONS_FILE: /etc/tolo/gateway/destinations.json
+            IDP_ISSUER: http://fakeidp:8080
+            IDP_AUDIENCE: backend-api
+            IDP_INTROSPECTION_CLIENT_ID: gateway-introspection
+            IDP_INTROSPECTION_CLIENT_SECRET_FILE: /etc/tolo/idp/introspection-client-secret
+        ports:
+            - "8080:8080"
+        volumes:
+            - internal-jwt-keys:/etc/tolo/keys:ro
+            - idp-introspection:/etc/tolo/idp:ro
+            - ./config/destinations.json:/etc/tolo/gateway/destinations.json:ro
+        networks:
+            - idp
+        depends_on:
+            keygen:
+                condition: service_completed_successfully
+
+volumes:
+    internal-jwt-keys:
+    idp-introspection:
+        name: tolo-idp-introspection
+
+networks:
+    idp:
+        name: tolo-idp
