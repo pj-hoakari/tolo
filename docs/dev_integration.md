@@ -54,9 +54,13 @@ runbook は次の 3 つに分かれる
 
 1. テナントの作成と所有権の取得
 2. イベントの作成
-3. `SaveGraph` と `PublishRevision`
+3. `SaveGraph`
 4. `RegisterEdgeDevice`（ルートごとに観測点を 1 つ、計 7 つ）
 5. `MapObservationPoint`（各観測点を `anchor.routeId` で同名のルートに紐づける）
+6. `PublishRevision`
+
+観測点の紐づけは公開した版に含まれ、Observation は公開済みの版の紐づけだけを読む（ADR-0083）  
+`PublishRevision` を `MapObservationPoint` より先に呼ぶと、公開した版に紐づけが無く、Flow Control へ送る観測が空になって提案は出ない
 
 グラフは迂回路のある会場の形で、ノードは `gate`・`j1`・`hallA`・`hallB`・`j2`・`out` の 6 つ、ルートはすべて `EDGE_DIRECTION_BOTH_WAYS` の 7 本になる  
 `gate` と `out` は外部ポイント `outside-gate`・`outside-out` と両通行のエッジで結ばれ、入退場の入退出点になる
@@ -80,7 +84,7 @@ flowchart LR
 
 既定の値では、番号が `surgeStart`（10）以下のサイクルでは一定の流量を送る。その後のサイクルでは `e-j1-hallA` への流量が 1.4 倍ずつ増え、検出人数も 2 ずつ増える  
 Flow Control の発火には停滞警戒の継続 5 分と急増の両方が要る  
-既定のイメージ（Observation 0.1.0-rc と Flow Control 0.4.0-dev）では、30 サイクル送っても判定は毎回 `VERDICT_SKIPPED_NO_TRIGGER` になり、提案は出ない（2026-10-15 時点）  
+既定のイメージでは、手元で 17 サイクル目に提案が出た（2026-10-15 時点）  
 急増は直近 30 分の流量の傾きで判定するため、途中でホストがスリープしてサイクルの間隔が空くと、発火までのサイクル数が増える
 
 各サイクルの後、`optimization_results` から、そのイベントの `verdict` が `VERDICT_OPTIMIZED` で、`optimization_result` の `detourPaths` が空でない行を数える  

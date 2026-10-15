@@ -107,16 +107,6 @@ steps:
                 nodes: "{{ concat(vars.nodes, vars.externalNodes) }}"
                 edges: "{{ concat(vars.edges, vars.externalEdges) }}"
     test: current.res.status == 200
-  publishRevision:
-    gw:
-      /tolo.graph.v1.GraphAuthoringService/PublishRevision:
-        post:
-          headers:
-            Authorization: "Bearer {{ steps.manageToken.res.body.access_token }}"
-          body:
-            application/json:
-              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
-    test: current.res.status == 200
   registerEdgeDevice:
     gw:
       /tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice:
@@ -146,6 +136,16 @@ steps:
                 observationPointId: "{{ steps.registerEdgeDevice.res.body.device.observationPoints[i].observationPointId }}"
                 anchor:
                   routeId: "{{ steps.registerEdgeDevice.res.body.device.observationPoints[i].name }}"
+    test: current.res.status == 200
+  publishRevision:
+    gw:
+      /tolo.graph.v1.GraphAuthoringService/PublishRevision:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.manageToken.res.body.access_token }}"
+          body:
+            application/json:
+              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
     test: current.res.status == 200
   ids:
     dump: |
