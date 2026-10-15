@@ -32,10 +32,9 @@ task fakeidp:up
 
 ### イメージ
 
-tolo-tenant-management の公開イメージ（`ghcr.io/pj-hoakari/tolo-tenant-management` と、マイグレーション用の `ghcr.io/pj-hoakari/tolo-tenant-management-migrate`）を使う  
-既定のタグは `0.1.0` で、digest まで固定してある  
-`config/seed/tenant-management.sql` はこのバージョンのスキーマに合わせて書いてあるので、イメージを上げるときは seed も直す  
-イメージは linux/amd64 と linux/arm64 の両方が公開されている
+tolo-tenant-management の develop の固定コミット（`a2ea479`）を git URL のビルドコンテキストにして、サーバーとマイグレーション用（`migrate` ターゲット）のイメージを作る  
+公開イメージ（`ghcr.io/pj-hoakari/tolo-tenant-management` の `0.1.0`）は develop よりスキーマが古いため使わない  
+`config/seed/tenant-management.sql` はこのコミットのスキーマに合わせて書いてあるので、コミットを上げるときは seed も直す
 
 未公開の版で試すときは、tolo-tenant-management のリポジトリでイメージを作り、`TOLO_TM_IMAGE` と `TOLO_TM_MIGRATE_IMAGE` で差し替える
 

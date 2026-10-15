@@ -62,8 +62,8 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | 環境変数 | サービス | 既定 |
 | --- | --- | --- |
 | `TOLO_GATEWAY_IMAGE` | `server` | tolo-service-gateway の固定コミットからビルド |
-| `TOLO_TM_IMAGE` | `tenant-management` | ghcr の固定した版 |
-| `TOLO_TM_MIGRATE_IMAGE` | `tenant-management-migrate` | ghcr の固定した版 |
+| `TOLO_TM_IMAGE` | `tenant-management` | tolo-tenant-management の固定コミットからビルド |
+| `TOLO_TM_MIGRATE_IMAGE` | `tenant-management-migrate` | tolo-tenant-management の固定コミットからビルド |
 | `TOLO_GA_IMAGE` | `graph-authoring` | ghcr の固定した版 |
 | `TOLO_GA_MIGRATE_IMAGE` | `graph-authoring-migrate` | ghcr の固定した版 |
 | `TOLO_OBS_IMAGE` | `observation` | ghcr の固定した版 |
@@ -75,7 +75,8 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `TOLO_IDP_IMAGE` | `idp`（`compose.idp.yml`） | ghcr の固定した版 |
 
 `server`・`firebase-emulator`・`web` は公開イメージが無いため、固定したコミットの git URL をビルドコンテキストにしている  
-この 3 つは、既定のタグのイメージが手元にあるとき、または `TOLO_*_IMAGE` が手元のイメージを指すとき、そのイメージをそのまま使う  
+`tenant-management` と `tenant-management-migrate` は、公開イメージ（0.1.0）が develop より古いため、同じく git URL からビルドする  
+これらは、既定のタグのイメージが手元にあるとき、または `TOLO_*_IMAGE` が手元のイメージを指すとき、そのイメージをそのまま使う  
 `docker compose up --build`（`task up -- --build`）を実行すると git からビルドし直し、そのタグを上書きする  
 手元でビルドしたイメージを使うときは `--build` を付けない
 
@@ -91,7 +92,7 @@ Web から使うテナントとイベントは固定してある
 
 `tenant-management-seed` が `config/seed/tenant-management.sql` でこれらを Tenant Management の DB に入れ、`tenant-management` は seed の後に起動する  
 seed は何度実行しても同じ結果になる  
-SQL は固定した tenant-management 0.1.0 のスキーマに合わせて書いてあるので、そのイメージを変えるときは SQL も直す
+SQL は固定した tolo-tenant-management のコミット（`a2ea479`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
 
 ## fake IdP
 
