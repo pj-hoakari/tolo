@@ -64,19 +64,20 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `TOLO_GATEWAY_IMAGE` | `server` | tolo-service-gateway の固定コミットからビルド |
 | `TOLO_TM_IMAGE` | `tenant-management` | tolo-tenant-management の固定コミットからビルド |
 | `TOLO_TM_MIGRATE_IMAGE` | `tenant-management-migrate` | tolo-tenant-management の固定コミットからビルド |
-| `TOLO_GA_IMAGE` | `graph-authoring` | tolo-graph-authoringの固定コミットからビルド |
-| `TOLO_GA_MIGRATE_IMAGE` | `graph-authoring-migrate` | tolo-graph-authoringの固定コミットからビルド |
-| `TOLO_OBS_IMAGE` | `observation` | tolo-observationの固定コミットからビルド |
-| `TOLO_OBS_MIGRATE_IMAGE` | `observation-migrate` | tolo-observationの固定コミットからビルド |
-| `TOLO_FLOW_IMAGE` | `flow-control` | tolo-flow-controlの固定コミットからビルド |
-| `TOLO_EDGE_BRIDGE_IMAGE` | `edge-bridge` | tolo-edge-bridgeの固定コミットからビルド |
+| `TOLO_GA_IMAGE` | `graph-authoring` | tolo-graph-authoring の固定コミットからビルド |
+| `TOLO_GA_MIGRATE_IMAGE` | `graph-authoring-migrate` | tolo-graph-authoring の固定コミットからビルド |
+| `TOLO_OBS_IMAGE` | `observation` | tolo-observation の固定コミットからビルド |
+| `TOLO_OBS_MIGRATE_IMAGE` | `observation-migrate` | tolo-observation の固定コミットからビルド |
+| `TOLO_FLOW_IMAGE` | `flow-control` | tolo-flow-control の固定コミットからビルド |
+| `TOLO_EDGE_BRIDGE_IMAGE` | `edge-bridge` | tolo-edge-bridge の固定コミットからビルド |
 | `TOLO_FIREBASE_EMULATOR_IMAGE` | `firebase-emulator` | tolo-edge-bridge の固定コミットからビルド |
 | `TOLO_WEB_IMAGE` | `web` | tolo-web の固定コミットからビルド |
-| `TOLO_IDP_IMAGE` | `idp`（`compose.idp.yml`） | tolo-idpの固定コミットからビルド（`Dockerfile.jvm`） |
+| `TOLO_IDP_IMAGE` | `idp`（`compose.idp.yml`） | ghcr の native ビルドの固定した版 |
 
 各サービスは、リリース版のイメージではなく、実装リポジトリの既定ブランチの固定したコミットを git URL のビルドコンテキストにしてビルドする  
 リリースを待たずに、既定ブランチに入った変更どうしの組み合わせを確かめるためである  
 コミットを上げるときは、`compose*.yml` の git URL とタグをそろえて書き換える  
+tolo-idp だけは例外で、ghcr に公開されている native ビルドのイメージを版と digest で固定して使う  
 これらは、既定のタグのイメージが手元にあるとき、または `TOLO_*_IMAGE` が手元のイメージを指すとき、そのイメージをそのまま使う  
 `docker compose up --build`（`task up -- --build`）を実行すると git からビルドし直し、そのタグを上書きする  
 手元でビルドしたイメージを使うときは `--build` を付けない

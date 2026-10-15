@@ -30,8 +30,9 @@ IdP は Discovery 文書にも `iss` にも設定値をそのまま使い、リ�
 
 ### イメージ
 
-tolo-idp の main の固定コミットを、`Dockerfile.jvm` で JVM イメージとしてビルドする  
-公開イメージ（`ghcr.io/pj-hoakari/tolo-idp`）は linux/amd64 の GraalVM native image で、arm64 のマシン（Apple Silicon）では Rosetta 上でも起動しないため使わない  
+ghcr に公開されている native ビルドのイメージ（`ghcr.io/pj-hoakari/tolo-idp` の `0.2.0`）を、digest まで固定して使う  
+ほかのサービスと違い、git からはビルドしない  
+`0.2.0` は linux/amd64 と linux/arm64 の両方が公開されていて、arm64 のマシン（Apple Silicon）でも起動する  
 手元でビルドしたイメージは `TOLO_IDP_IMAGE` で差し替える  
 `idp-relation-stub` は IdP が参照するスタブなので、公開イメージ（`ghcr.io/pj-hoakari/tolo-relation-stub`）のまま使う
 
