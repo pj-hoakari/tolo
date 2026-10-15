@@ -12,7 +12,7 @@ task fakeidp:up
 ```
 
 追加されるサービスは `observation`・`observation-db`（PostgreSQL 18）・`observation-migrate`（マイグレーションの init サービス）になる  
-`observation` と `observation-migrate` は、ghcr の版と digest を固定したイメージを使う。手元でビルドしたイメージは `TOLO_OBS_IMAGE` と `TOLO_OBS_MIGRATE_IMAGE` で差し替える  
+`observation` と `observation-migrate` は、tolo-observation の main の固定コミットからビルドする。手元でビルドしたイメージは `TOLO_OBS_IMAGE` と `TOLO_OBS_MIGRATE_IMAGE` で差し替える  
 `config/destinations.json` が `tolo-observation` を `http://observation:8080` へ向けているため、サービス名は `observation` で固定になる
 
 | サービス | ホスト | コンテナ内 |

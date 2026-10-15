@@ -16,7 +16,7 @@ task fakeidp:up
 fake IdP は `COMPOSE_PROJECT_NAME` によらずネットワーク `tolo-idp` に参加するので、fake IdP を使えるのは一度に 1 つのプロジェクトだけになる
 
 `compose.flow.yml` が加えるサービスは `flow-control` と `runn` の 2 つになる  
-`flow-control` は、ghcr の版と digest を固定した tolo-flow-control のイメージを使う（`TOLO_FLOW_IMAGE` で差し替えられる）  
+`flow-control` は、tolo-flow-control の develop の固定コミットからビルドする（`TOLO_FLOW_IMAGE` で差し替えられる）  
 Flow Control は Gateway を通らない（ADR-0048）。Observation は `compose.obs.yml` の `FLOW_CONTROL_URL`（`http://flow-control:8080`）で直接呼ぶ  
 `runn` は profile `runn` に属するので、`docker compose up` では起動しない
 

@@ -30,15 +30,10 @@ IdP は Discovery 文書にも `iss` にも設定値をそのまま使い、リ�
 
 ### イメージ
 
-既定では `ghcr.io/pj-hoakari/tolo-idp:latest` を使う  
-このイメージは linux/amd64 の GraalVM native image で AVX2 などを要求するため、arm64 のマシン（Apple Silicon）では Rosetta 上でも起動しない  
-その場合は tolo-idp を JVM イメージとして自前でビルドし、`TOLO_IDP_IMAGE` で差し替える
-
-```bash
-./gradlew bootJar
-printf 'FROM eclipse-temurin:24-jre\nCOPY build/libs/tolo-idp-0.0.1-SNAPSHOT.jar /app/app.jar\nENTRYPOINT ["java","-jar","/app/app.jar"]\n' | docker build -t tolo-idp-local:jvm -f - .
-TOLO_IDP_IMAGE=tolo-idp-local:jvm docker compose -p toloidpcheck -f compose.yml -f compose.idp.yml up -d
-```
+tolo-idp の main の固定コミットを、`Dockerfile.jvm` で JVM イメージとしてビルドする  
+公開イメージ（`ghcr.io/pj-hoakari/tolo-idp`）は linux/amd64 の GraalVM native image で、arm64 のマシン（Apple Silicon）では Rosetta 上でも起動しないため使わない  
+手元でビルドしたイメージは `TOLO_IDP_IMAGE` で差し替える  
+`idp-relation-stub` は IdP が参照するスタブなので、公開イメージ（`ghcr.io/pj-hoakari/tolo-relation-stub`）のまま使う
 
 ### relation のデータ
 

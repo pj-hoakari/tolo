@@ -1,6 +1,8 @@
 services:
     flow-control:
-        image: ${TOLO_FLOW_IMAGE:-ghcr.io/pj-hoakari/tolo-flow-control:0.4.0-dev@sha256:ea42b2037220182fda16c8c6d2b059611498fc5582db07845b0a91bbd44ef5c5}
+        image: ${TOLO_FLOW_IMAGE:-tolo-flow-control:17cd12a}
+        build:
+            context: https://github.com/pj-hoakari/tolo-flow-control.git#17cd12a79aeefbf3912eb0969d7251cb765089be
         environment:
             PORT: "8080"
             TOLO_RPC_MAX_REQUEST_BYTES: "8388608"

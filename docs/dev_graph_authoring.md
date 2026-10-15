@@ -12,7 +12,7 @@ task fakeidp:up
 ```
 
 追加されるサービスは `graph-authoring`・`graph-authoring-db`（PostgreSQL 18）・`graph-authoring-migrate`（マイグレーションの init サービス）になる  
-`graph-authoring` と `graph-authoring-migrate` は、ghcr の版と digest を固定したイメージを使う。手元でビルドしたイメージは `TOLO_GA_IMAGE` と `TOLO_GA_MIGRATE_IMAGE` で差し替える  
+`graph-authoring` と `graph-authoring-migrate` は、tolo-graph-authoring の main の固定コミットからビルドする。手元でビルドしたイメージは `TOLO_GA_IMAGE` と `TOLO_GA_MIGRATE_IMAGE` で差し替える  
 `config/destinations.json` が `tolo-graph-authoring` を `http://graph-authoring:8080` へ向けているため、サービス名は `graph-authoring` で固定になる
 
 | サービス | ホスト | コンテナ内 |

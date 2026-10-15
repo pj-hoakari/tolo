@@ -34,7 +34,10 @@ services:
         restart: "no"
 
     idp:
-        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:latest@sha256:c907cbb0f77e8867ad859b4838798a3125dd8b71ccc5d76bbb76215b070ec93c}
+        image: ${TOLO_IDP_IMAGE:-tolo-idp:5021e5f}
+        build:
+            context: https://github.com/pj-hoakari/tolo-idp.git#5021e5fe0096601299fe3202b75bab800ed3bb53
+            dockerfile: Dockerfile.jvm
         environment:
             SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
             SPRING_DATASOURCE_URL: jdbc:postgresql://idp-db:5432/tolo_idp
