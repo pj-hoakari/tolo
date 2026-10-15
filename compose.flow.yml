@@ -1,0 +1,36 @@
+services:
+    flow-control:
+        image: ${TOLO_FLOW_IMAGE:-ghcr.io/pj-hoakari/tolo-flow-control:0.4.0-dev@sha256:ea42b2037220182fda16c8c6d2b059611498fc5582db07845b0a91bbd44ef5c5}
+        environment:
+            PORT: "8080"
+            TOLO_RPC_MAX_REQUEST_BYTES: "8388608"
+            TOLO_RPC_MAX_EXECUTION_SEC: "720"
+        read_only: true
+        tmpfs:
+            - /tmp
+        networks:
+            - flow-control
+
+    observation:
+        depends_on:
+            flow-control:
+                condition: service_started
+
+    runn:
+        image: ghcr.io/k1low/runn:v1.11.1@sha256:0c71b25001b3d9acc506f8c69ffd0b1d11625127474fcf13ff7bad2d5a0ccd95
+        profiles:
+            - runn
+        working_dir: /books
+        command: ["run", "--verbose", "integration-proposal.yml"]
+        environment:
+            OBSERVATION_DB_DSN: postgres://observation-db:5432/observation?sslmode=disable&user=observation&password=${TOLO_OBS_DB_PASSWORD:-observation}
+        volumes:
+            - ./scripts/runbooks:/books:ro
+        networks:
+            - idp
+            - observation-db
+        depends_on:
+            server:
+                condition: service_started
+            observation:
+                condition: service_started

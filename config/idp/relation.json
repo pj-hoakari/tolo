@@ -1,0 +1,14 @@
+{
+  "tenants": [
+    { "id": "0123456789abcdef", "name": "Dev tenant (hex id)" }
+  ],
+  "events": [
+    { "id": "fedcba9876543210", "tenantId": "0123456789abcdef", "name": "Dev event (hex id)" }
+  ],
+  "tenantMembers": [
+    { "tenantId": "0123456789abcdef", "userId": "user-123", "role": "owner" }
+  ],
+  "eventMembers": [
+    { "eventId": "fedcba9876543210", "userId": "user-123", "role": "owner" }
+  ]
+}

@@ -1,0 +1,105 @@
+services:
+    server:
+        environment:
+            IDP_ISSUER: http://idp:8080
+            IDP_AUDIENCE: backend-api
+            IDP_INTROSPECTION_CLIENT_ID: client-123
+            IDP_INTROSPECTION_CLIENT_SECRET_FILE: /etc/tolo/idp-seed/introspection-client-secret
+            IDP_LEGACY_EVENTS_WRITE_SCOPE: ${IDP_LEGACY_EVENTS_WRITE_SCOPE:-}
+        ports: !override
+            - "18090:8080"
+        volumes:
+            - idp-seed-introspection:/etc/tolo/idp-seed:ro
+        depends_on: !override
+            keygen:
+                condition: service_completed_successfully
+            idp-seed-secret:
+                condition: service_completed_successfully
+            idp:
+                condition: service_started
+
+    idp-seed-secret:
+        image: alpine/openssl:3.5.8@sha256:3f25da71f70eba788067daac3f3df03bd1de7a7c52ed89fa93b94ad2c92d986b
+        entrypoint: ["/bin/sh", "-c"]
+        command:
+            - |
+              set -eu
+              printf '%s\n' "$${SEED_CLIENT_SECRET}" > /idp/introspection-client-secret
+              chown 65532:65532 /idp/introspection-client-secret
+              chmod 0400 /idp/introspection-client-secret
+        environment:
+            SEED_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+        volumes:
+            - idp-seed-introspection:/idp
+        restart: "no"
+
+    idp:
+        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:latest@sha256:c907cbb0f77e8867ad859b4838798a3125dd8b71ccc5d76bbb76215b070ec93c}
+        environment:
+            SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+            SPRING_DATASOURCE_URL: jdbc:postgresql://idp-db:5432/tolo_idp
+            SPRING_DATASOURCE_USERNAME: tolo_idp
+            SPRING_DATASOURCE_PASSWORD: ${TOLO_IDP_DB_PASSWORD:-tolo_idp}
+            SPRING_FLYWAY_LOCATIONS: classpath:db/postgresql
+            TOLO_IDP_ISSUER: http://idp:8080
+            TOLO_IDP_RATE_LIMIT_REDIS_URI: redis://idp-redis:6379
+            TOLO_IDP_RELATION_BASE_URL: http://idp-relation-stub:8080
+            TOLO_IDP_SEED_ENABLED: "true"
+            TOLO_IDP_SEED_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            TOLO_IDP_JWK_ALLOW_EPHEMERAL: "true"
+        ports:
+            - "18080:8080"
+        networks:
+            - idp
+            - idp-store
+        depends_on:
+            idp-db:
+                condition: service_healthy
+            idp-redis:
+                condition: service_healthy
+            idp-relation-stub:
+                condition: service_started
+
+    idp-relation-stub:
+        image: ghcr.io/pj-hoakari/tolo-relation-stub:latest@sha256:c65b5602c0f8ff74a2682cedfb84afed040ce25fd46c9a267a2c7d379ed50601
+        environment:
+            RELATION_ADDR: ":8080"
+            RELATION_DATA: ${TOLO_RELATION_DATA:-/data/relation.json}
+        ports:
+            - "18081:8080"
+        volumes:
+            - ./config/idp:/data:ro
+        networks:
+            - idp-store
+
+    idp-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: tolo_idp
+            POSTGRES_USER: tolo_idp
+            POSTGRES_PASSWORD: ${TOLO_IDP_DB_PASSWORD:-tolo_idp}
+        networks:
+            - idp-store
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+
+    idp-redis:
+        image: redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+        networks:
+            - idp-store
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+
+volumes:
+    idp-seed-introspection:
+
+networks:
+    idp-store:

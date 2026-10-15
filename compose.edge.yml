@@ -1,0 +1,40 @@
+services:
+    firebase-emulator:
+        image: ${TOLO_FIREBASE_EMULATOR_IMAGE:-tolo-firebase-emulator:b1dbb62}
+        build:
+            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#b1dbb629fc0425cb7a8ffbf7a96536b6ace985c9:firebase-emulator
+        ports:
+            - "8081:8080"
+            - "9099:9099"
+            - "4000:4000"
+        networks:
+            - firebase
+        healthcheck:
+            test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
+            interval: 2s
+            timeout: 2s
+            retries: 60
+
+    edge-bridge:
+        image: ${TOLO_EDGE_BRIDGE_IMAGE:-ghcr.io/pj-hoakari/tolo-edge-bridge:0.4.0-rc@sha256:168b406cd33c666d9cee1e326e6c51c51f0f25e0eea11ce23614200ba5425660}
+        environment:
+            SERVER_ADDR: ":8787"
+            FIRESTORE_PROJECT_ID: demo-tolo
+            FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
+            FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+            IDP_ISSUER: http://fakeidp:8080
+            IDP_AUDIENCE: backend-api
+            IDP_JWKS_URL: http://fakeidp:8080/oauth2/jwks
+            CONSOLE_CLIENT_ID: console-ui
+            EDGE_CLIENT_ID: edge-page
+        ports:
+            - "8787:8787"
+        networks:
+            - firebase
+            - idp
+        depends_on:
+            firebase-emulator:
+                condition: service_healthy
+
+networks:
+    firebase:

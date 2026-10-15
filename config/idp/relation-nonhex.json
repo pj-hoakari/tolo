@@ -1,0 +1,14 @@
+{
+  "tenants": [
+    { "id": "tenant-a", "name": "Dev tenant (non-hex id)" }
+  ],
+  "events": [
+    { "id": "event-a1", "tenantId": "tenant-a", "name": "Dev event (non-hex id)" }
+  ],
+  "tenantMembers": [
+    { "tenantId": "tenant-a", "userId": "user-123", "role": "owner" }
+  ],
+  "eventMembers": [
+    { "eventId": "event-a1", "userId": "user-123", "role": "owner" }
+  ]
+}

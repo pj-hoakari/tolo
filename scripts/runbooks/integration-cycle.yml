@@ -1,0 +1,68 @@
+desc: エッジ端末として 1 サイクル分の Heartbeat と計測値を送り、提案の行数を数える
+runners:
+  gw: http://server:8080
+  db: ${OBSERVATION_DB_DSN}
+if: included
+vars:
+  index: 0
+  token: ""
+  eventId: ""
+  edgeDeviceId: ""
+  observationPoints: []
+  surgeStart: 10
+  surgeBase: 10
+  surgeGrowth: 1.4
+  profile:
+    e-in-j1: {through: 5, surge: 1, stagnation: 0}
+    e-j1-hallA: {through: 0, surge: 1, stagnation: 2}
+    e-j1-hallB: {through: 5, surge: 0, stagnation: 0}
+    e-hallA-j2: {through: 0, surge: 0, stagnation: 0}
+    e-hallB-j2: {through: 5, surge: 0, stagnation: 0}
+    e-j1-j2: {through: 0, surge: 0, stagnation: 0}
+    e-j2-out: {through: 5, surge: 0, stagnation: 0}
+steps:
+  heartbeat:
+    gw:
+      /tolo.observation.v1.EdgeDeviceService/Heartbeat:
+        post:
+          headers:
+            Authorization: "Bearer {{ vars.token }}"
+          body:
+            application/json:
+              eventId: "{{ vars.eventId }}"
+              edgeDeviceId: "{{ vars.edgeDeviceId }}"
+              activeObservationPointIds: "{{ map(vars.observationPoints, .observationPointId) }}"
+    test: current.res.status == 200
+  report:
+    gw:
+      /tolo.observation.v1.MeasurementIngestService/ReportMeasurements:
+        post:
+          headers:
+            Authorization: "Bearer {{ vars.token }}"
+          body:
+            application/json:
+              eventId: "{{ vars.eventId }}"
+              edgeDeviceId: "{{ vars.edgeDeviceId }}"
+              measurements: >-
+                {{
+                let ramp = max(0, vars.index - vars.surgeStart);
+                let surge = vars.surgeBase * vars.surgeGrowth ** ramp;
+                let end = now().UTC();
+                map(vars.observationPoints, { {
+                'observationPointId': .observationPointId,
+                'windowStart': end.Add(duration('-60s')).Format('2006-01-02T15:04:05Z'),
+                'windowEnd': end.Format('2006-01-02T15:04:05Z'),
+                'countIn': int(round(vars.profile[.name].through + vars.profile[.name].surge * surge)),
+                'countOut': 0,
+                'source': 'MEASUREMENT_SOURCE_EDGE',
+                'meanDetectedPeople': 1.0 + vars.profile[.name].stagnation * ramp
+                } })
+                }}
+    test: current.res.status == 200 && current.res.body.acceptedCount == len(vars.observationPoints)
+  proposals:
+    db:
+      query: |
+        SELECT count(*) AS count FROM optimization_results
+        WHERE event_id = '{{ vars.eventId }}'
+          AND verdict = 'VERDICT_OPTIMIZED'
+          AND jsonb_array_length(optimization_result->'detourPaths') > 0

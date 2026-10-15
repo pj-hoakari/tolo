@@ -1,0 +1,8 @@
+{
+  "destinations": {
+    "tolo-testbackend": { "url": "http://testbackend:8080" },
+    "tolo-tenant-management": { "url": "http://tenant-management:8080" },
+    "tolo-graph-authoring": { "url": "http://graph-authoring:8080" },
+    "tolo-observation": { "url": "http://observation:8080" }
+  }
+}

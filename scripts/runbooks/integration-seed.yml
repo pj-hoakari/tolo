@@ -1,0 +1,158 @@
+desc: 結合環境の事前データを作る
+runners:
+  gw: http://server:8080
+  idp: http://fakeidp:8080
+vars:
+  ownerSub: user-owner
+  clientId: client-123
+  nodes:
+    - {nodeId: gate, nodeType: NODE_TYPE_TRANSIT_ONLY, labels: {ja: gate}, layout: {x: 0, y: 100}}
+    - {nodeId: j1, nodeType: NODE_TYPE_TRANSIT_ONLY, labels: {ja: j1}, layout: {x: 100, y: 100}}
+    - {nodeId: hallA, nodeType: NODE_TYPE_GOAL_TRANSIT_MIXED, labels: {ja: hallA}, layout: {x: 200, y: 200}}
+    - {nodeId: hallB, nodeType: NODE_TYPE_GOAL_TRANSIT_MIXED, labels: {ja: hallB}, layout: {x: 200, y: 0}}
+    - {nodeId: j2, nodeType: NODE_TYPE_TRANSIT_ONLY, labels: {ja: j2}, layout: {x: 300, y: 100}}
+    - {nodeId: out, nodeType: NODE_TYPE_TRANSIT_ONLY, labels: {ja: out}, layout: {x: 400, y: 100}}
+  edges:
+    - {edgeId: e-in-j1, sourceNodeId: gate, targetNodeId: j1, direction: EDGE_DIRECTION_BOTH_WAYS}
+    - {edgeId: e-j1-hallA, sourceNodeId: j1, targetNodeId: hallA, direction: EDGE_DIRECTION_BOTH_WAYS}
+    - {edgeId: e-j1-hallB, sourceNodeId: j1, targetNodeId: hallB, direction: EDGE_DIRECTION_BOTH_WAYS}
+    - {edgeId: e-hallA-j2, sourceNodeId: hallA, targetNodeId: j2, direction: EDGE_DIRECTION_BOTH_WAYS}
+    - {edgeId: e-hallB-j2, sourceNodeId: hallB, targetNodeId: j2, direction: EDGE_DIRECTION_BOTH_WAYS}
+    - {edgeId: e-j1-j2, sourceNodeId: j1, targetNodeId: j2, direction: EDGE_DIRECTION_BOTH_WAYS}
+    - {edgeId: e-j2-out, sourceNodeId: j2, targetNodeId: out, direction: EDGE_DIRECTION_BOTH_WAYS}
+  externalNodes:
+    - {nodeId: outside-gate, nodeType: NODE_TYPE_EXTERNAL, labels: {ja: outside-gate}, layout: {x: -100, y: 100}}
+    - {nodeId: outside-out, nodeType: NODE_TYPE_EXTERNAL, labels: {ja: outside-out}, layout: {x: 500, y: 100}}
+  externalEdges:
+    - {edgeId: x-gate, sourceNodeId: outside-gate, targetNodeId: gate, direction: EDGE_DIRECTION_BOTH_WAYS}
+    - {edgeId: x-out, sourceNodeId: out, targetNodeId: outside-out, direction: EDGE_DIRECTION_BOTH_WAYS}
+steps:
+  startTenant:
+    gw:
+      /tolo.tenant.v1.TenantService/StartTenantRegistration:
+        post:
+          body:
+            application/json:
+              name: '"integration-{{ now().UnixNano() }}"'
+              contractPlan: standard
+    test: current.res.status == 200
+  registrationToken:
+    idp:
+      /token:
+        post:
+          body:
+            application/json:
+              token_use: registration
+              sub: "{{ vars.ownerSub }}"
+              client_id: "{{ vars.clientId }}"
+              scope: tenant.claim
+    test: current.res.status == 200
+  claimTenant:
+    gw:
+      /tolo.tenant.v1.TenantService/ClaimTenantOwnership:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.registrationToken.res.body.access_token }}"
+          body:
+            application/json:
+              tenantId: "{{ steps.startTenant.res.body.tenant.tenantId }}"
+              ownershipClaimToken: "{{ steps.startTenant.res.body.ownershipClaimToken }}"
+    test: current.res.status == 200
+  ownerToken:
+    idp:
+      /token:
+        post:
+          body:
+            application/json:
+              token_use: tenant_access
+              sub: "{{ vars.ownerSub }}"
+              client_id: "{{ vars.clientId }}"
+              tenant_id: "{{ steps.startTenant.res.body.tenant.tenantId }}"
+              scope: tenant.read tenant.write events.read events.manage
+    test: current.res.status == 200
+  createEvent:
+    gw:
+      /tolo.tenant.v1.TenantService/CreateEvent:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.ownerToken.res.body.access_token }}"
+          body:
+            application/json:
+              tenantId: "{{ steps.startTenant.res.body.tenant.tenantId }}"
+              name: integration-venue
+    test: current.res.status == 200
+  manageToken:
+    idp:
+      /token:
+        post:
+          body:
+            application/json:
+              token_use: event_access
+              sub: "{{ vars.ownerSub }}"
+              client_id: "{{ vars.clientId }}"
+              tenant_id: "{{ steps.startTenant.res.body.tenant.tenantId }}"
+              event_id: "{{ steps.createEvent.res.body.event.eventId }}"
+              scope: events.manage
+    test: current.res.status == 200
+  saveGraph:
+    gw:
+      /tolo.graph.v1.GraphAuthoringService/SaveGraph:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.manageToken.res.body.access_token }}"
+          body:
+            application/json:
+              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
+              document:
+                nodes: "{{ concat(vars.nodes, vars.externalNodes) }}"
+                edges: "{{ concat(vars.edges, vars.externalEdges) }}"
+    test: current.res.status == 200
+  publishRevision:
+    gw:
+      /tolo.graph.v1.GraphAuthoringService/PublishRevision:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.manageToken.res.body.access_token }}"
+          body:
+            application/json:
+              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
+    test: current.res.status == 200
+  registerEdgeDevice:
+    gw:
+      /tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.manageToken.res.body.access_token }}"
+          body:
+            application/json:
+              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
+              name: venue-counter
+              observationPointNames: "{{ map(vars.edges, .edgeId) }}"
+    test: |
+      current.res.status == 200
+      && len(current.res.body.device.observationPoints) == len(vars.edges)
+  mapObservationPoints:
+    loop:
+      count: len(vars.edges)
+    gw:
+      /tolo.graph.v1.GraphAuthoringService/MapObservationPoint:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.manageToken.res.body.access_token }}"
+          body:
+            application/json:
+              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
+              mapping:
+                observationPointId: "{{ steps.registerEdgeDevice.res.body.device.observationPoints[i].observationPointId }}"
+                anchor:
+                  routeId: "{{ steps.registerEdgeDevice.res.body.device.observationPoints[i].name }}"
+    test: current.res.status == 200
+  ids:
+    dump: |
+      {
+        "tenantId": steps.startTenant.res.body.tenant.tenantId,
+        "eventId": steps.createEvent.res.body.event.eventId,
+        "edgeDeviceId": steps.registerEdgeDevice.res.body.device.edgeDeviceId,
+        "observationPageUrl": steps.registerEdgeDevice.res.body.observationPageUrl,
+        "observationPoints": map(steps.registerEdgeDevice.res.body.device.observationPoints, { {"observationPointId": .observationPointId, "routeId": .name} })
+      }

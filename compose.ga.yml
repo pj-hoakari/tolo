@@ -1,0 +1,61 @@
+services:
+    server:
+        networks:
+            - graph-authoring
+
+    graph-authoring:
+        image: ${TOLO_GA_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring:0.1.0-rc.1@sha256:0fa3a7c85477832e13bd29bb20f3ef68fd9ab4c3b82694b7e5568a59c2cd6512}
+        environment:
+            SERVER_ADDR: :8080
+            DATABASE_URL: postgres://graph-authoring-db:5432/graph_authoring?sslmode=disable&user=graph_authoring&password=${TOLO_GA_DB_PASSWORD:-graph_authoring}
+            INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
+            INTERNAL_JWT_ISSUER: service-gateway
+            INTERNAL_JWT_AUDIENCE: tolo-graph-authoring
+            TENANT_MANAGEMENT_URL: http://server:8090
+        networks:
+            - graph-authoring
+            - graph-authoring-db
+        depends_on:
+            graph-authoring-migrate:
+                condition: service_completed_successfully
+            server:
+                condition: service_started
+
+    graph-authoring-migrate:
+        image: ${TOLO_GA_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring-migrate:0.1.0-rc.1@sha256:ece4f1736e0319c6a154f852f95eea7ad4ee051fdd1858da5e55dd65458e1571}
+        command:
+            - -database
+            - postgres://graph-authoring-db:5432/graph_authoring?sslmode=disable&user=graph_authoring&password=${TOLO_GA_DB_PASSWORD:-graph_authoring}
+            - up
+        networks:
+            - graph-authoring-db
+        depends_on:
+            graph-authoring-db:
+                condition: service_healthy
+        restart: "no"
+
+    graph-authoring-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: graph_authoring
+            POSTGRES_USER: graph_authoring
+            POSTGRES_PASSWORD: ${TOLO_GA_DB_PASSWORD:-graph_authoring}
+        networks:
+            - graph-authoring-db
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+        volumes:
+            - graph-authoring-data:/var/lib/postgresql
+
+volumes:
+    graph-authoring-data:
+
+networks:
+    graph-authoring:
+        internal: true
+    graph-authoring-db:
+        internal: true

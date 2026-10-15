@@ -1,0 +1,79 @@
+services:
+    server:
+        networks:
+            - tenant-management
+
+    tenant-management:
+        image: ${TOLO_TM_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management:0.1.0@sha256:5e8d85d73d5e2c01ca417cef1ee8464667c2b2884de3f4872bc5217399e6ec3c}
+        environment:
+            SERVER_ADDR: :8080
+            DATABASE_URL: postgres://tenant-management-db:5432/tenant_management?sslmode=disable&user=tenant_management&password=${TOLO_TM_DB_PASSWORD:-tenant_management}
+            INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
+            INTERNAL_JWT_ISSUER: service-gateway
+            INTERNAL_JWT_AUDIENCE: tolo-tenant-management
+        networks:
+            - tenant-management
+            - tenant-management-db
+        depends_on:
+            tenant-management-seed:
+                condition: service_completed_successfully
+            server:
+                condition: service_started
+
+    tenant-management-migrate:
+        image: ${TOLO_TM_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management-migrate:0.1.0@sha256:0fe94712fba3d2083917213179589e12d9ca64ff2883e2d763a177dc21c82689}
+        command:
+            - -database
+            - postgres://tenant-management-db:5432/tenant_management?sslmode=disable&user=tenant_management&password=${TOLO_TM_DB_PASSWORD:-tenant_management}
+            - up
+        networks:
+            - tenant-management-db
+        depends_on:
+            tenant-management-db:
+                condition: service_healthy
+        restart: "no"
+
+    tenant-management-seed:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        command:
+            - psql
+            - --set=ON_ERROR_STOP=1
+            - --set=tenant_id=${TOLO_TENANT_ID:-0123456789abcdef}
+            - --set=event_id=${TOLO_EVENT_ID:-fedcba9876543210}
+            - --set=owner_sub=${TOLO_OWNER_SUB:-user-owner}
+            - --file=/seed/tenant-management.sql
+            - postgres://tenant-management-db:5432/tenant_management?sslmode=disable&user=tenant_management&password=${TOLO_TM_DB_PASSWORD:-tenant_management}
+        volumes:
+            - ./config/seed:/seed:ro
+        networks:
+            - tenant-management-db
+        depends_on:
+            tenant-management-migrate:
+                condition: service_completed_successfully
+        restart: "no"
+
+    tenant-management-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: tenant_management
+            POSTGRES_USER: tenant_management
+            POSTGRES_PASSWORD: ${TOLO_TM_DB_PASSWORD:-tenant_management}
+        networks:
+            - tenant-management-db
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+        volumes:
+            - tenant-management-data:/var/lib/postgresql
+
+volumes:
+    tenant-management-data:
+
+networks:
+    tenant-management:
+        internal: true
+    tenant-management-db:
+        internal: true

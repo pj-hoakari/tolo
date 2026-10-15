@@ -1,0 +1,52 @@
+desc: 計測値を送り続け、迂回路の提案が optimization_results に保存されるまで待つ
+runners:
+  idp: http://fakeidp:8080
+  db: ${OBSERVATION_DB_DSN}
+vars:
+  maxCycles: 30
+steps:
+  seed:
+    include:
+      path: integration-seed.yml
+  reportToken:
+    idp:
+      /token:
+        post:
+          body:
+            application/json:
+              token_use: event_access
+              sub: "{{ steps.seed.vars.ownerSub }}"
+              client_id: "{{ steps.seed.vars.clientId }}"
+              tenant_id: "{{ steps.seed.steps.startTenant.res.body.tenant.tenantId }}"
+              event_id: "{{ steps.seed.steps.createEvent.res.body.event.eventId }}"
+              scope: events.report
+              ttl_seconds: 14400
+    test: current.res.status == 200
+  cycles:
+    loop:
+      count: vars.maxCycles
+      until: current.steps.proposals.rows[0].count > 0
+      minInterval: 60
+      maxInterval: 60
+    include:
+      path: integration-cycle.yml
+      vars:
+        index: "{{ i }}"
+        token: "{{ steps.reportToken.res.body.access_token }}"
+        eventId: "{{ steps.seed.steps.createEvent.res.body.event.eventId }}"
+        edgeDeviceId: "{{ steps.seed.steps.registerEdgeDevice.res.body.device.edgeDeviceId }}"
+        observationPoints: "{{ steps.seed.steps.registerEdgeDevice.res.body.device.observationPoints }}"
+  proposal:
+    db:
+      query: |
+        SELECT id, verdict,
+               optimization_result->>'solverStatus' AS solver_status,
+               (optimization_result->'detourPaths')::text AS detour_paths
+        FROM optimization_results
+        WHERE event_id = '{{ steps.seed.steps.createEvent.res.body.event.eventId }}'
+          AND verdict = 'VERDICT_OPTIMIZED'
+          AND jsonb_array_length(optimization_result->'detourPaths') > 0
+        ORDER BY id
+        LIMIT 1
+    dump: current.rows
+    test: len(current.rows) == 1
