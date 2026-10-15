@@ -1,0 +1,59 @@
+name: E2E
+
+on:
+    pull_request:
+    push:
+        branches: [develop]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+env:
+    COMPOSE_FILE: compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.flow.yml
+
+jobs:
+    e2e:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Set up Task
+              uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
+
+            - name: Start services
+              id: up
+              run: task up
+
+            - name: Start the fake IdP
+              run: task fakeidp:up
+
+            - name: Wait for the gateway
+              run: |
+                  set -euo pipefail
+                  for i in $(seq 1 60); do
+                    if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/readyz || true)" = "200" ]; then
+                      echo "ready after ${i} attempts"
+                      exit 0
+                    fi
+                    sleep 2
+                  done
+                  echo "::error::Service Gateway が準備完了になりません"
+                  exit 1
+
+            - name: Run the cross-service checks
+              run: task e2e
+
+            - name: Dump service logs
+              if: failure() && (steps.up.outcome == 'success' || steps.up.outcome == 'failure')
+              run: |
+                  docker compose logs --no-color
+                  docker logs tolo-fakeidp || true
+
+            - name: Stop services
+              if: always() && (steps.up.outcome == 'success' || steps.up.outcome == 'failure')
+              run: |
+                  docker stop tolo-fakeidp || true
+                  docker compose down -v
