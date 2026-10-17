@@ -8,18 +8,18 @@ services:
             - web
 
     web:
-        image: ${TOLO_WEB_IMAGE:-tolo-web:2cda547}
+        image: ${TOLO_WEB_IMAGE:-tolo-web:d8703b7}
         build:
-            context: https://github.com/pj-hoakari/tolo-web.git#2cda54791921ade349114973ea6eed5b771c617b
+            context: https://github.com/pj-hoakari/tolo-web.git#d8703b75f53373c56de9e18c405b00ccf8074aed
             target: dev
             secrets:
                 - npm_token
         environment:
             NEXT_TELEMETRY_DISABLED: "1"
             NEXT_PUBLIC_API_MOCKING: disabled
-            NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-tolo
-            NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST: 127.0.0.1:8081
-            NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+            FIREBASE_PROJECT_ID: demo-tolo
+            FIRESTORE_EMULATOR_HOST: 127.0.0.1:8081
+            FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
             GATEWAY_URL: http://server:8080
             SIGNALING_URL: http://edge-bridge:8787
             OBSERVATION_API_MOCKING: disabled
