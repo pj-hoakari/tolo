@@ -10,7 +10,7 @@ permissions:
     contents: read
 
 env:
-    COMPOSE_FILE: compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.flow.yml
+    COMPOSE_FILE: compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.op.yml:compose.flow.yml
 
 jobs:
     e2e:

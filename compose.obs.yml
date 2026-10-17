@@ -4,9 +4,9 @@ services:
             - observation
 
     observation:
-        image: ${TOLO_OBS_IMAGE:-tolo-observation:fb2730d}
+        image: ${TOLO_OBS_IMAGE:-tolo-observation:60f9280}
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#fb2730dc1fe851b7130a4f670c9108bda48a68d1
+            context: https://github.com/pj-hoakari/tolo-observation.git#60f9280e53ad25265e9833399afc5a381f7f60cd
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://observation-db:5432/observation?sslmode=disable&user=observation&password=${TOLO_OBS_DB_PASSWORD:-observation}
@@ -16,6 +16,7 @@ services:
             INTERNAL_JWT_AUDIENCE: tolo-observation
             GRAPH_AUTHORING_URL: http://server:8090
             FLOW_CONTROL_URL: http://flow-control:8080
+            OPERATION_URL: http://server:8090
         networks:
             - observation
             - observation-db
@@ -27,9 +28,9 @@ services:
                 condition: service_started
 
     observation-migrate:
-        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:fb2730d}
+        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:60f9280}
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#fb2730dc1fe851b7130a4f670c9108bda48a68d1
+            context: https://github.com/pj-hoakari/tolo-observation.git#60f9280e53ad25265e9833399afc5a381f7f60cd
             target: migrate
         command:
             - -database

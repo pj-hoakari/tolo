@@ -1,0 +1,65 @@
+services:
+    server:
+        networks:
+            - operation
+
+    operation:
+        image: ${TOLO_OP_IMAGE:-tolo-operation:5bd4c59}
+        build:
+            context: https://github.com/pj-hoakari/tolo-operation.git#5bd4c59c9a1de678c1a6a7224ab7d30f195c93ab
+        environment:
+            SERVER_ADDR: :8080
+            DATABASE_URL: postgres://operation-db:5432/operation?sslmode=disable&user=operation&password=${TOLO_OP_DB_PASSWORD:-operation}
+            INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
+            INTERNAL_JWT_ISSUER: service-gateway
+            INTERNAL_JWT_AUDIENCE: tolo-operation
+        networks:
+            - operation
+            - operation-db
+        depends_on:
+            operation-migrate:
+                condition: service_completed_successfully
+            server:
+                condition: service_started
+
+    operation-migrate:
+        image: ${TOLO_OP_MIGRATE_IMAGE:-tolo-operation-migrate:5bd4c59}
+        build:
+            context: https://github.com/pj-hoakari/tolo-operation.git#5bd4c59c9a1de678c1a6a7224ab7d30f195c93ab
+            target: migrate
+        command:
+            - -database
+            - postgres://operation-db:5432/operation?sslmode=disable&user=operation&password=${TOLO_OP_DB_PASSWORD:-operation}
+            - up
+        networks:
+            - operation-db
+        depends_on:
+            operation-db:
+                condition: service_healthy
+        restart: "no"
+
+    operation-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: operation
+            POSTGRES_USER: operation
+            POSTGRES_PASSWORD: ${TOLO_OP_DB_PASSWORD:-operation}
+        networks:
+            - operation-db
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+        volumes:
+            - operation-data:/var/lib/postgresql
+
+volumes:
+    operation-data:
+
+networks:
+    operation:
+        internal: true
+    operation-db:
+        internal: true
