@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://localhost:8080}"
+FAKEIDP_BASE_URL="${FAKEIDP_BASE_URL:-http://localhost:8082}"
+TENANT_ID="${TOLO_TENANT_ID:-0123456789abcdef}"
+EVENT_ID="${TOLO_EVENT_ID:-fedcba9876543210}"
+SENDER_SUB="${SENDER_SUB:-staff-sender}"
+SURGE_START="${SURGE_START:-0}"
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+token_script="${script_dir}/fakeidp-token.sh"
+
+for cmd in curl jq docker; do
+    command -v "${cmd}" >/dev/null 2>&1 || { printf '%s is required\n' "${cmd}" >&2; exit 1; }
+done
+
+since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+body=''
+status=''
+found=''
+
+call() {
+    local procedure="$1" payload="$2" token="$3"
+    local response
+    response="$(curl -sS -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer ${token}" \
+        -d "${payload}" -w '\n%{http_code}' "${GATEWAY_BASE_URL}/${procedure}")"
+    status="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+
+    printf '\n=== %s -> HTTP %s\n' "${procedure}" "${status}"
+    printf '%s\n' "${body}" | jq . 2>/dev/null || printf '%s\n' "${body}"
+}
+
+expect() {
+    [ "${status}" = "$1" ] || { printf 'expected HTTP %s, got %s\n' "$1" "${status}" >&2; exit 1; }
+}
+
+logs() {
+    docker compose logs --no-log-prefix --since "${since}" "$1" 2>/dev/null | jq -cR 'fromjson? | select(type == "object")'
+}
+
+require_log() {
+    local service="$1" label="$2" filter="$3"
+    found=''
+    for _ in $(seq 1 10); do
+        found="$(logs "${service}" | jq -c "${filter}" | tail -n 1)"
+        [ -n "${found}" ] && break
+        sleep 1
+    done
+    [ -n "${found}" ] || { printf 'NG: %s not found in the %s log\n' "${label}" "${service}" >&2; exit 1; }
+    printf 'ok: %s\n%s\n' "${label}" "${found}"
+}
+
+printf '# 1. a GUEST staff message through the public listener\n'
+operator_token="$(FAKEIDP_BASE_URL="${FAKEIDP_BASE_URL}" "${token_script}" -k event_access -b "${SENDER_SUB}" -c console-ui \
+    -t "${TENANT_ID}" -e "${EVENT_ID}" -s 'events.read events.operate')"
+call tolo.operation.v1.StaffCommunicationService/SendStaffMessage \
+    "$(jq -nc --arg t "${TENANT_ID}" --arg e "${EVENT_ID}" '{tenantId: $t, eventId: $e, audience: "AUDIENCE_GUEST", body: "Gate B is open"}')" \
+    "${operator_token}"
+expect 200
+message_id="$(printf '%s' "${body}" | jq -r '.messageId')"
+
+call tolo.operation.v1.StaffCommunicationService/ListStaffMessages \
+    "$(jq -nc --arg t "${TENANT_ID}" --arg e "${EVENT_ID}" '{tenantId: $t, eventId: $e, audience: "AUDIENCE_GUEST"}')" \
+    "${operator_token}"
+expect 200
+printf '%s' "${body}" | jq -e --arg m "${message_id}" 'any(.messages[]?; .messageId == $m)' >/dev/null \
+    || { printf 'ListStaffMessages did not return message %s\n' "${message_id}" >&2; exit 1; }
+
+printf '\n# 2. Observation reports a proposal; runn sets staff-online connected and staff-offline disconnected\n'
+docker compose --profile runn run --rm -T runn run --var "surgeStart:${SURGE_START}" integration-proposal.yml
+
+printf '\n# 3. Observation called Operation through the internal listener\n'
+for procedure in RequestProposalDelivery RecordFeedbackValues; do
+    require_log server "${procedure} from tolo-observation" \
+        "select(.audit.method? == \"/tolo.operation.v1.DeliveryCoordinationService/${procedure}\" and .audit.caller_service == \"tolo-observation\" and .audit.http_status == 200) | .audit"
+done
+
+printf '\n# 4. the log-only skeletons\n'
+require_log operation "guest-messages publish of ${message_id}" \
+    "select(.message == \"pubsub publish (log-only skeleton)\" and .topic == \"guest-messages\" and any(.payload.upserts[]?; .message_id == \"${message_id}\"))"
+require_log operation 'SendPush to staff-offline' \
+    'select(.message == "notification SendPush (log-only skeleton)" and .recipient_user_ids == ["staff-offline"])'
+delivery_id="$(printf '%s' "${found}" | jq -r '.data.delivery_id')"
+require_log operation "realtime-delivery publish of ${delivery_id} to staff-online" \
+    "select(.message == \"pubsub publish (log-only skeleton)\" and .topic == \"realtime-delivery\" and .payload.delivery_id == \"${delivery_id}\" and .payload.recipient_user_ids == [\"staff-online\"]) | del(.payload.payload)"
+
+printf '\nall steps behaved as expected (message_id=%s delivery_id=%s)\n' "${message_id}" "${delivery_id}"

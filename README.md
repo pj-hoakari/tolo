@@ -37,7 +37,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 ## compose ファイル
 
 構成は `compose.yml` に、サービスごとのオーバーライドを重ねる形になる  
-`Taskfile.yml` は、`COMPOSE_FILE` が未設定なら `compose.yml`・`compose.tm.yml`・`compose.ga.yml`・`compose.obs.yml`・`compose.flow.yml`・`compose.edge.yml`・`compose.web.yml` を重ねる  
+`Taskfile.yml` は、`COMPOSE_FILE` が未設定なら `compose.yml`・`compose.tm.yml`・`compose.ga.yml`・`compose.obs.yml`・`compose.op.yml`・`compose.flow.yml`・`compose.edge.yml`・`compose.web.yml` を重ねる  
 プロジェクト名は `tolo` になる
 
 | ファイル | 加えるもの |
@@ -46,6 +46,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.tm.yml` | Tenant Management とその DB・マイグレーション・固定テナントの seed |
 | `compose.ga.yml` | Graph Authoring とその DB・マイグレーション |
 | `compose.obs.yml` | Observation とその DB・マイグレーション |
+| `compose.op.yml` | Operation とその DB・マイグレーション |
 | `compose.flow.yml` | Flow Control と、profile `runn` の `runn` |
 | `compose.edge.yml` | Firebase Emulator（ホストの 8081・9099・4000）と edge-bridge（ホストの 8787） |
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
@@ -53,6 +54,9 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.o11y.yml` | Jaeger |
 
 `web` には `GATEWAY_URL=http://server:8080` と `SIGNALING_URL=http://edge-bridge:8787` を渡し、モックを無効にしてある
+
+Realtime・Notification・Guest Service は、まだこの環境に含めていない  
+そのため Operation から外へ送るもの（Pub/Sub の `guest-messages`・`realtime-delivery` への publish と、Notification の `SendPush`）は、当面ログに出すだけのスケルトンになる
 
 ## イメージの差し替え
 
@@ -68,6 +72,8 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `TOLO_GA_MIGRATE_IMAGE` | `graph-authoring-migrate` | tolo-graph-authoring の固定コミットからビルド |
 | `TOLO_OBS_IMAGE` | `observation` | tolo-observation の固定コミットからビルド |
 | `TOLO_OBS_MIGRATE_IMAGE` | `observation-migrate` | tolo-observation の固定コミットからビルド |
+| `TOLO_OP_IMAGE` | `operation` | tolo-operation の固定コミットからビルド |
+| `TOLO_OP_MIGRATE_IMAGE` | `operation-migrate` | tolo-operation の固定コミットからビルド |
 | `TOLO_FLOW_IMAGE` | `flow-control` | tolo-flow-control の固定コミットからビルド |
 | `TOLO_EDGE_BRIDGE_IMAGE` | `edge-bridge` | tolo-edge-bridge の固定コミットからビルド |
 | `TOLO_FIREBASE_EMULATOR_IMAGE` | `firebase-emulator` | tolo-edge-bridge の固定コミットからビルド |
@@ -100,7 +106,7 @@ SQL は固定した tolo-tenant-management のコミット（`fbfa436`）のス�
 
 tolo-idp が追いつくまでは、開発用の fake IdP でトークンを発行する  
 fake IdP は暫定なので、Docker Compose には含めず `task fakeidp:up` で手動で起動する  
-`task fakeidp:up` は tolo-service-gateway の固定コミット（`4766a84`）の `fakeidp` ターゲットをビルドし、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
+`task fakeidp:up` は tolo-service-gateway の固定コミット（`0000183`）の `fakeidp` ターゲットをビルドし、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
 ホストからは `http://localhost:8082` で届く  
 失効照会の secret は、`keygen` が書いた名前付きボリューム `tolo-idp-introspection` から読む
 
@@ -122,7 +128,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 | `task fakeidp:up` | fake IdP を起動する。`task up` の後に実行する |
 | `task fakeidp:down` | fake IdP を止める。発行したトークンは使えなくなる |
 | `task tokens` | Web 用のトークンを `.env` の行の形で出力する |
-| `task e2e` | オンボーディング・Graph Authoring・Observation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
+| `task e2e` | オンボーディング・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
 GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.edge.yml` と `compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
@@ -132,6 +138,7 @@ GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` 
 - [実在の Tenant Management での開発](docs/dev_tenant_management.md)
 - [Graph Authoring からのサービス間呼び出しの確認](docs/dev_graph_authoring.md)
 - [Observation からのサービス間呼び出しの確認](docs/dev_observation.md)
+- [Operation への提案の配信の確認](docs/dev_operation.md)
 - [提案機構の結合環境](docs/dev_integration.md)
 - [実物の IdP での開発](docs/dev_real_idp.md)
 - [NPM パッケージ用の開発環境セットアップ](docs/setup-for-npm-package.md)
