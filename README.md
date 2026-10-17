@@ -94,13 +94,13 @@ Web から使うテナントとイベントは固定してある
 
 `tenant-management-seed` が `config/seed/tenant-management.sql` でこれらを Tenant Management の DB に入れ、`tenant-management` は seed の後に起動する  
 seed は何度実行しても同じ結果になる  
-SQL は固定した tolo-tenant-management のコミット（`a2ea479`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+SQL は固定した tolo-tenant-management のコミット（`fbfa436`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
 
 ## fake IdP
 
 tolo-idp が追いつくまでは、開発用の fake IdP でトークンを発行する  
 fake IdP は暫定なので、Docker Compose には含めず `task fakeidp:up` で手動で起動する  
-`task fakeidp:up` は tolo-service-gateway の固定コミット（`2f92e01`）の `fakeidp` ターゲットをビルドし、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
+`task fakeidp:up` は tolo-service-gateway の固定コミット（`4766a84`）の `fakeidp` ターゲットをビルドし、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
 ホストからは `http://localhost:8082` で届く  
 失効照会の secret は、`keygen` が書いた名前付きボリューム `tolo-idp-introspection` から読む
 
