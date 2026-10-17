@@ -74,6 +74,7 @@ tasks:
             - ./scripts/tenant-management-onboarding.sh
             - ./scripts/graph-authoring-event-check.sh
             - ./scripts/observation-measurement-check.sh
+            - ./scripts/operation-delivery-check.sh
             - ./scripts/compose-reachability-check.sh
             - ./scripts/gateway-log-token-check.sh
 

@@ -4,10 +4,24 @@ runners:
   db: ${OBSERVATION_DB_DSN}
 vars:
   maxCycles: 30
+  surgeStart: 10
+  staff:
+    - {userId: staff-online, connected: true}
+    - {userId: staff-offline, connected: false}
 steps:
   seed:
     include:
       path: integration-seed.yml
+  connectionStates:
+    loop:
+      count: len(vars.staff)
+    include:
+      path: integration-connection-state.yml
+      vars:
+        tenantId: "{{ steps.seed.steps.startTenant.res.body.tenant.tenantId }}"
+        eventId: "{{ steps.seed.steps.createEvent.res.body.event.eventId }}"
+        userId: "{{ vars.staff[i].userId }}"
+        connected: "{{ vars.staff[i].connected }}"
   reportToken:
     idp:
       /token:
@@ -32,6 +46,7 @@ steps:
       path: integration-cycle.yml
       vars:
         index: "{{ i }}"
+        surgeStart: "{{ vars.surgeStart }}"
         token: "{{ steps.reportToken.res.body.access_token }}"
         eventId: "{{ steps.seed.steps.createEvent.res.body.event.eventId }}"
         edgeDeviceId: "{{ steps.seed.steps.registerEdgeDevice.res.body.device.edgeDeviceId }}"

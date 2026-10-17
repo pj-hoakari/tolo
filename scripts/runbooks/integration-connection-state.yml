@@ -1,0 +1,39 @@
+desc: スタッフとして Operation に接続状態を登録する
+runners:
+  gw: http://server:8080
+  idp: http://fakeidp:8080
+if: included
+vars:
+  tenantId: ""
+  eventId: ""
+  userId: ""
+  connected: false
+steps:
+  token:
+    idp:
+      /token:
+        post:
+          body:
+            application/json:
+              token_use: event_access
+              sub: "{{ vars.userId }}"
+              client_id: console-ui
+              tenant_id: "{{ vars.tenantId }}"
+              event_id: "{{ vars.eventId }}"
+              scope: events.read
+    test: current.res.status == 200
+  update:
+    gw:
+      /tolo.operation.v1.DeliveryCoordinationService/UpdateConnectionState:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.token.res.body.access_token }}"
+          body:
+            application/json:
+              tenantId: "{{ vars.tenantId }}"
+              eventId: "{{ vars.eventId }}"
+              userId: "{{ vars.userId }}"
+              deviceId: "{{ vars.userId }}-device"
+              connected: "{{ vars.connected }}"
+              at: "{{ now().UTC().Format('2006-01-02T15:04:05Z') }}"
+    test: current.res.status == 200

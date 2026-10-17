@@ -1,6 +1,6 @@
 # 提案機構の結合環境
 
-`compose.flow.yml` は、`compose.yml`・`compose.tm.yml`・`compose.ga.yml`・`compose.obs.yml` の上に [tolo-flow-control](https://github.com/pj-hoakari/tolo-flow-control) を加えるオーバーライドになる  
+`compose.flow.yml` は、`compose.yml`・`compose.tm.yml`・`compose.ga.yml`・`compose.obs.yml`・`compose.op.yml` の上に [tolo-flow-control](https://github.com/pj-hoakari/tolo-flow-control) を加えるオーバーライドになる  
 これを重ねると、エッジ端末の計測値が Gateway を通って Observation に届き、Observation が Graph Authoring と Flow Control を呼んで、結果を `optimization_results` に保存するまでを手元で通せる  
 通しの確認は [runn](https://github.com/k1LoW/runn) の runbook で行う。runn はホストに入れず、compose の `runn` サービスとしてコンテナで動かす
 
@@ -8,7 +8,7 @@
 
 ```bash
 export COMPOSE_PROJECT_NAME=tolointegration
-export COMPOSE_FILE=compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.flow.yml
+export COMPOSE_FILE=compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.op.yml:compose.flow.yml
 docker compose up -d
 task fakeidp:up
 ```
@@ -42,13 +42,14 @@ docker compose run --rm runn
 `runn` サービスは `ghcr.io/k1low/runn` の版を固定したイメージで、`scripts/runbooks` を `/books` に読み込み専用でマウントし、`integration-proposal.yml` を実行する  
 Gateway と fake IdP にはネットワーク `tolo-idp` 上の名前 `server`・`fakeidp` で、Observation の DB には環境変数 `OBSERVATION_DB_DSN` の接続先で届く
 
-runbook は次の 3 つに分かれる
+runbook は次の 4 つに分かれる
 
 | runbook | 内容 |
 | --- | --- |
 | `integration-seed.yml` | 事前データを作り、作った ID と観測ページの URL を出力する |
+| `integration-connection-state.yml` | スタッフ 1 人分のトークンを取り、Operation の `UpdateConnectionState` に接続状態を登録する |
 | `integration-cycle.yml` | 1 サイクル分の `Heartbeat` と `ReportMeasurements` を送り、提案を含む行を数える |
-| `integration-proposal.yml` | seed を実行し、cycle を 60 秒ずつ空けて繰り返し、提案を含む行が現れたら成功にする |
+| `integration-proposal.yml` | seed を実行し、スタッフの接続状態を登録し、cycle を 60 秒ずつ空けて繰り返し、提案を含む行が現れたら成功にする |
 
 `integration-seed.yml` は、公開用 listener 越しに次の順で事前データを作る。トークンは fake IdP の `/token` から取る
 
@@ -78,10 +79,12 @@ flowchart LR
     out -- x-out --- outside-out
 ```
 
-`integration-proposal.yml` は、seed の後に `events.report` の `event_access` トークンを取り、`integration-cycle.yml` を最大 `maxCycles`（既定 30）回繰り返す  
+`integration-proposal.yml` は、seed の後に `vars` の `staff` のスタッフ（接続中の `staff-online` と未接続の `staff-offline`）ごとに `integration-connection-state.yml` を実行する  
+続けて `events.report` の `event_access` トークンを取り、`integration-cycle.yml` を最大 `maxCycles`（既定 30）回繰り返す  
 各サイクルで観測点ごとに送る値は、`integration-cycle.yml` の `vars` の `profile` から runn の式で計算する  
 `i` をサイクルの番号とし、`ramp = max(0, i - surgeStart)` とすると、`countIn` は `through + surge × surgeBase × surgeGrowth ^ ramp` を四捨五入した値、`meanDetectedPeople` は `1 + stagnation × ramp` になる
 
+`surgeStart` は `integration-proposal.yml` の `vars` から渡し、`--var` で変えられる  
 既定の値では、番号が `surgeStart`（10）以下のサイクルでは一定の流量を送る。その後のサイクルでは `e-j1-hallA` への流量が 1.4 倍ずつ増え、検出人数も 2 ずつ増える  
 Flow Control の発火には停滞警戒の継続 5 分と急増の両方が要る  
 既定のイメージでは、手元で 17 サイクル目に提案が出た（2026-10-15 時点）  

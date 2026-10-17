@@ -128,7 +128,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 | `task fakeidp:up` | fake IdP を起動する。`task up` の後に実行する |
 | `task fakeidp:down` | fake IdP を止める。発行したトークンは使えなくなる |
 | `task tokens` | Web 用のトークンを `.env` の行の形で出力する |
-| `task e2e` | オンボーディング・Graph Authoring・Observation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
+| `task e2e` | オンボーディング・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
 GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.edge.yml` と `compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
@@ -138,6 +138,7 @@ GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` 
 - [実在の Tenant Management での開発](docs/dev_tenant_management.md)
 - [Graph Authoring からのサービス間呼び出しの確認](docs/dev_graph_authoring.md)
 - [Observation からのサービス間呼び出しの確認](docs/dev_observation.md)
+- [Operation への提案の配信の確認](docs/dev_operation.md)
 - [提案機構の結合環境](docs/dev_integration.md)
 - [実物の IdP での開発](docs/dev_real_idp.md)
 - [NPM パッケージ用の開発環境セットアップ](docs/setup-for-npm-package.md)
