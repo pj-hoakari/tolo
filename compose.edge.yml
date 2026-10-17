@@ -1,8 +1,8 @@
 services:
     firebase-emulator:
-        image: ${TOLO_FIREBASE_EMULATOR_IMAGE:-tolo-firebase-emulator:a797b2b}
+        image: ${TOLO_FIREBASE_EMULATOR_IMAGE:-tolo-firebase-emulator:e5a530c}
         build:
-            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#a797b2b1cafb7ccc099fa229b860b62c90984260:firebase-emulator
+            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#e5a530c0eecbf7d765a83f5523994124c645f594:firebase-emulator
         ports:
             - "8081:8080"
             - "9099:9099"
@@ -16,9 +16,9 @@ services:
             retries: 60
 
     edge-bridge:
-        image: ${TOLO_EDGE_BRIDGE_IMAGE:-tolo-edge-bridge:a797b2b}
+        image: ${TOLO_EDGE_BRIDGE_IMAGE:-tolo-edge-bridge:e5a530c}
         build:
-            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#a797b2b1cafb7ccc099fa229b860b62c90984260
+            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#e5a530c0eecbf7d765a83f5523994124c645f594
         environment:
             SERVER_ADDR: ":8787"
             FIRESTORE_PROJECT_ID: demo-tolo
