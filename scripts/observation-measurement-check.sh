@@ -85,6 +85,8 @@ call tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice \
 expect 200
 device_id="$(printf '%s' "${body}" | jq -r '.device.edgeDeviceId')"
 point_id="$(printf '%s' "${body}" | jq -r '.device.observationPoints[0].observationPointId')"
+printf '%s' "${body}" | jq -e '.observationPagePath | type == "string" and length > 0' >/dev/null \
+    || { printf 'RegisterEdgeDevice did not return observationPagePath\n' >&2; exit 1; }
 
 printf '\n# 3. Heartbeat and ReportMeasurements from the device\n'
 report_token="$(token -k event_access -b "${OWNER_SUB}" -t "${tenant_id}" -e "${event_id}" -s 'events.report')"

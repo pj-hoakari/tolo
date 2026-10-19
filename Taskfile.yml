@@ -9,6 +9,8 @@ env:
         sh: echo "${COMPOSE_FILE:-compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.op.yml:compose.flow.yml:compose.edge.yml:compose.web.yml}"
     TOLO_TENANT_ID:
         sh: echo "${TOLO_TENANT_ID:-0123456789abcdef}"
+    TOLO_TENANT_SUBDOMAIN:
+        sh: echo "${TOLO_TENANT_SUBDOMAIN:-test}"
     TOLO_EVENT_ID:
         sh: echo "${TOLO_EVENT_ID:-fedcba9876543210}"
     TOLO_OWNER_SUB:
@@ -72,6 +74,7 @@ tasks:
         desc: Run the cross-service checks against the running services.
         cmds:
             - ./scripts/tenant-management-onboarding.sh
+            - ./scripts/tenant-subdomain-seed-check.sh
             - ./scripts/graph-authoring-event-check.sh
             - ./scripts/observation-measurement-check.sh
             - ./scripts/operation-delivery-check.sh

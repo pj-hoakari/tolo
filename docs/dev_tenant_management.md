@@ -78,7 +78,7 @@ curl -sS -H 'Content-Type: application/json' -d "$(jq -nc --arg t "$TOKEN" '{tok
 
 ## オンボーディングの流れ
 
-`scripts/tenant-management-onboarding.sh` が、仮テナントの作成から所有権の取得・イベント作成・メンバー追加・権限の境界・失効までを通しで実行し、各段階の HTTP ステータスと本文を出す  
+`scripts/tenant-management-onboarding.sh` が、仮テナントの作成から所有権の取得とサブドメインの解決・イベント作成・メンバー追加・権限の境界・失効までを通しで実行し、各段階の HTTP ステータスと本文を出す  
 想定と違うステータスが返った段階で失敗する
 
 ```bash
@@ -98,7 +98,7 @@ CLAIM=$(printf '%s' "$TENANT" | jq -r .ownershipClaimToken)
 
 REG=$(./scripts/fakeidp-token.sh -k registration -b user-owner -s "tenant.claim")
 curl -sS -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $REG" \
-    -d "{\"tenantId\":\"$TID\",\"ownershipClaimToken\":\"$CLAIM\"}" \
+    -d "{\"tenantId\":\"$TID\",\"ownershipClaimToken\":\"$CLAIM\",\"subdomain\":\"acme\"}" \
     http://localhost:8080/tolo.tenant.v1.TenantService/ClaimTenantOwnership
 
 TOKEN=$(./scripts/fakeidp-token.sh -k tenant_access -b user-owner -t "$TID")
@@ -110,7 +110,8 @@ curl -sS -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $
 Connect の JSON は lowerCamelCase になる（`tenantId`・`ownershipClaimToken`・`contractPlan` など）  
 enum は `ROLE_STAFF` のような完全な名前の文字列で渡す  
 `ClaimTenantOwnership` は `token_use=registration` を要求し、`registration` のトークンは `tenant_id` を持たない  
-対象のテナントはリクエストの `tenantId` と一回限りの `ownershipClaimToken` で指定する
+対象のテナントはリクエストの `tenantId` と一回限りの `ownershipClaimToken` で指定する  
+`subdomain` は必須で、すでに使われているサブドメインを指定すると `already_exists`（HTTP 409）になる
 
 ## 通る RPC と通らない RPC
 
@@ -119,7 +120,8 @@ enum は `ROLE_STAFF` のような完全な名前の文字列で渡す
 | RPC | 必要な scope | 結果 |
 | --- | --- | --- |
 | `TenantService/StartTenantRegistration` | （匿名） | `200`。`tenantId` と `ownershipClaimToken` |
-| `TenantService/ClaimTenantOwnership` | `tenant.claim`（`registration`） | `200`。`ownershipState` が `OWNED` になる |
+| `TenantService/ClaimTenantOwnership` | `tenant.claim`（`registration`） | `200`。`ownershipState` が `OWNED` になり、`subdomain` が入る |
+| `TenantService/ResolveTenantSubdomain` | （匿名） | `200`。サブドメインに対応する `tenantId` |
 | `TenantService/ChangeTenantContract` | `tenant.write` | `200` |
 | `TenantService/CreateEvent` | `events.manage` | `200` |
 | `TenantService/TransitionEventStatus` | `events.manage` | `200` |
