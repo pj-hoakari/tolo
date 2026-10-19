@@ -1,7 +1,7 @@
 BEGIN;
 
-INSERT INTO tenants (id, public_id, name, contract_plan, ownership_state)
-VALUES (gen_random_uuid(), :'tenant_id', 'tolo-dev-' || :'tenant_id', 'standard', 'owned')
+INSERT INTO tenants (id, public_id, name, contract_plan, ownership_state, subdomain)
+VALUES (gen_random_uuid(), :'tenant_id', 'tolo-dev-' || :'tenant_id', 'standard', 'owned', :'tenant_subdomain')
 ON CONFLICT (public_id) DO NOTHING;
 
 INSERT INTO events (id, public_id, tenant_id, tenant_public_id, name, status)

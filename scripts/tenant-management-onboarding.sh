@@ -7,6 +7,7 @@ OWNER_SUB="${OWNER_SUB:-user-owner}"
 OUTSIDER_SUB="${OUTSIDER_SUB:-user-outsider}"
 MEMBER_SUB="${MEMBER_SUB:-user-staff}"
 TENANT_NAME="${TENANT_NAME:-acme-$$-${RANDOM}}"
+TENANT_SUBDOMAIN="${TENANT_SUBDOMAIN:-onb-$$-${RANDOM}}"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 token_script="${script_dir}/fakeidp-token.sh"
@@ -51,11 +52,29 @@ printf 'tenant_id=%s\n' "${tenant_id}"
 printf '\n# 2. ClaimTenantOwnership with a registration token\n'
 registration_token="$(token -k registration -b "${OWNER_SUB}" -s 'tenant.claim')"
 call tolo.tenant.v1.TenantService/ClaimTenantOwnership \
-    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" '{tenantId: $t, ownershipClaimToken: $c}')" \
+    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" --arg s "${TENANT_SUBDOMAIN}" '{tenantId: $t, ownershipClaimToken: $c, subdomain: $s}')" \
     "${registration_token}"
 expect 200
+[ "$(printf '%s' "${body}" | jq -r '.tenant.subdomain')" = "${TENANT_SUBDOMAIN}" ] || { printf 'claimed tenant does not carry the subdomain\n' >&2; exit 1; }
 
-printf '\n# 3. tenant_access flow\n'
+printf '\n# 3. tenant subdomain\n'
+call tolo.tenant.v1.TenantService/ResolveTenantSubdomain \
+    "$(jq -nc --arg s "${TENANT_SUBDOMAIN}" '{subdomain: $s}')"
+expect 200
+[ "$(printf '%s' "${body}" | jq -r '.tenantId')" = "${tenant_id}" ] || { printf 'anonymous resolve returned another tenant\n' >&2; exit 1; }
+
+call tolo.tenant.v1.TenantService/StartTenantRegistration \
+    "$(jq -nc --arg n "${TENANT_NAME}" '{name: $n, contractPlan: "standard"}')"
+expect 200
+rival_id="$(printf '%s' "${body}" | jq -r '.tenant.tenantId')"
+rival_claim_token="$(printf '%s' "${body}" | jq -r '.ownershipClaimToken')"
+call tolo.tenant.v1.TenantService/ClaimTenantOwnership \
+    "$(jq -nc --arg t "${rival_id}" --arg c "${rival_claim_token}" --arg s "${TENANT_SUBDOMAIN}" '{tenantId: $t, ownershipClaimToken: $c, subdomain: $s}')" \
+    "${registration_token}"
+expect 409
+[ "$(printf '%s' "${body}" | jq -r '.code')" = "already_exists" ] || { printf 'expected already_exists for a taken subdomain\n' >&2; exit 1; }
+
+printf '\n# 4. tenant_access flow\n'
 owner_token="$(token -k tenant_access -b "${OWNER_SUB}" -t "${tenant_id}" -s 'tenant.read tenant.write events.read events.manage')"
 
 call tolo.tenant.v1.TenantService/CreateEvent \
@@ -81,7 +100,7 @@ call tolo.relation.v1.RelationAdminService/ListMemberships \
     "$(jq -nc --arg t "${tenant_id}" '{tenantId: $t}')" "${owner_token}"
 expect 200
 
-printf '\n# 4. permission boundaries\n'
+printf '\n# 5. permission boundaries\n'
 outsider_token="$(token -k tenant_access -b "${OUTSIDER_SUB}" -t "${tenant_id}" -s 'tenant.read tenant.write events.read events.manage')"
 call tolo.relation.v1.RelationAdminService/AddTenantMember \
     "$(jq -nc --arg t "${tenant_id}" '{tenantId: $t, userId: "user-x", tenantRole: "ROLE_STAFF"}')" \
@@ -101,7 +120,7 @@ call tolo.tenant.v1.TenantService/CreateEvent \
     "$(jq -nc --arg t "${tenant_id}" '{tenantId: $t, name: "denied"}')" "${readonly_token}"
 expect 403
 
-printf '\n# 5. revocation\n'
+printf '\n# 6. revocation\n'
 revoked_token="$(token -k tenant_access -b "${OWNER_SUB}" -t "${tenant_id}" -s 'tenant.read tenant.write events.read events.manage')"
 curl -sS -o /dev/null -H 'Content-Type: application/json' \
     -d "$(jq -nc --arg t "${revoked_token}" '{token: $t}')" "${FAKEIDP_BASE_URL}/revoke"
@@ -115,7 +134,7 @@ call tolo.tenant.v1.TenantService/ListEvents \
     "$(jq -nc --arg t "${tenant_id}" '{tenantId: $t}')" "${revoked_token}"
 expect 200
 
-printf '\n# 6. internal-only RPC with an external token\n'
+printf '\n# 7. internal-only RPC with an external token\n'
 call tolo.tenant.v1.TenantService/GetEvent \
     "$(jq -nc --arg e "${event_id}" '{eventId: $e}')" "${owner_token}"
 expect 403

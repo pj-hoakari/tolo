@@ -46,7 +46,7 @@ runbook は次の 4 つに分かれる
 
 | runbook | 内容 |
 | --- | --- |
-| `integration-seed.yml` | 事前データを作り、作った ID と観測ページの URL を出力する |
+| `integration-seed.yml` | 事前データを作り、作った ID と観測ページのパスを出力する |
 | `integration-connection-state.yml` | スタッフ 1 人分のトークンを取り、Operation の `UpdateConnectionState` に接続状態を登録する |
 | `integration-cycle.yml` | 1 サイクル分の `Heartbeat` と `ReportMeasurements` を送り、提案を含む行を数える |
 | `integration-proposal.yml` | seed を実行し、スタッフの接続状態を登録し、cycle を 60 秒ずつ空けて繰り返し、提案を含む行が現れたら成功にする |
@@ -104,4 +104,4 @@ docker compose run --rm runn run --verbose --var maxCycles:40 integration-propos
 docker compose run --rm runn run --verbose integration-seed.yml
 ```
 
-出力の `observationPageUrl`（`http://<tenant_id>.localhost:3000/event/<event_id>/observation/<edge_device_id>`）が、その端末の観測ページになる
+出力の `observationPagePath` をそのテナントのサブドメインのホスト（`http://<subdomain>.localhost:3000`）につなげると、その端末の観測ページになる

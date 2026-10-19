@@ -27,8 +27,8 @@ task tokens
 
 | 画面 | URL |
 | --- | --- |
-| テナントの管理 | `http://0123456789abcdef.localhost:3000/management` |
-| イベントの管理 | `http://0123456789abcdef.localhost:3000/event/fedcba9876543210/management` |
+| テナントの管理 | `http://test.localhost:3000/management` |
+| イベントの管理 | `http://test.localhost:3000/event/fedcba9876543210/management` |
 
 止めるときは、先に `task fakeidp:down` で fake IdP を止めてから `task down` を実行する  
 fake IdP がネットワーク `tolo-idp` につながったままだと、そのネットワークを削除できない  
@@ -95,18 +95,21 @@ Web から使うテナントとイベントは固定してある
 | 環境変数 | 既定 | 内容 |
 | --- | --- | --- |
 | `TOLO_TENANT_ID` | `0123456789abcdef` | テナントの ID |
+| `TOLO_TENANT_SUBDOMAIN` | `test` | テナントのサブドメイン |
 | `TOLO_EVENT_ID` | `fedcba9876543210` | イベントの ID |
 | `TOLO_OWNER_SUB` | `user-owner` | 所有者の `sub` |
 
 `tenant-management-seed` が `config/seed/tenant-management.sql` でこれらを Tenant Management の DB に入れ、`tenant-management` は seed の後に起動する  
 seed は何度実行しても同じ結果になる  
-SQL は固定した tolo-tenant-management のコミット（`fbfa436`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+Web の URL のホストにはサブドメインを使い、固定のテナントは `<TOLO_TENANT_SUBDOMAIN>.localhost`（既定は `test.localhost`）で開く  
+サブドメインは Tenant Management が持ち、匿名の `ResolveTenantSubdomain` でテナントの ID に引ける  
+SQL は固定した tolo-tenant-management のコミット（`00b472c`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
 
 ## fake IdP
 
 tolo-idp が追いつくまでは、開発用の fake IdP でトークンを発行する  
 fake IdP は暫定なので、Docker Compose には含めず `task fakeidp:up` で手動で起動する  
-`task fakeidp:up` は tolo-service-gateway の固定コミット（`0000183`）の `fakeidp` ターゲットをビルドし、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
+`task fakeidp:up` は tolo-service-gateway の固定コミット（`9eb734f`）の `fakeidp` ターゲットをビルドし、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
 ホストからは `http://localhost:8082` で届く  
 失効照会の secret は、`keygen` が書いた名前付きボリューム `tolo-idp-introspection` から読む
 
@@ -128,7 +131,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 | `task fakeidp:up` | fake IdP を起動する。`task up` の後に実行する |
 | `task fakeidp:down` | fake IdP を止める。発行したトークンは使えなくなる |
 | `task tokens` | Web 用のトークンを `.env` の行の形で出力する |
-| `task e2e` | オンボーディング・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
+| `task e2e` | オンボーディング・固定テナントのサブドメイン・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
 GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.edge.yml` と `compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する

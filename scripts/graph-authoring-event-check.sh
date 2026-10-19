@@ -5,6 +5,7 @@ GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://localhost:8080}"
 FAKEIDP_BASE_URL="${FAKEIDP_BASE_URL:-http://localhost:8082}"
 OWNER_SUB="${OWNER_SUB:-user-owner}"
 TENANT_NAME="${TENANT_NAME:-graph-$$-${RANDOM}}"
+TENANT_SUBDOMAIN="${TENANT_SUBDOMAIN:-graph-$$-${RANDOM}}"
 MISSING_EVENT_ID="${MISSING_EVENT_ID:-deadbeefdeadbeef}"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,7 +72,7 @@ claim_token="$(printf '%s' "${body}" | jq -r '.ownershipClaimToken')"
 
 registration_token="$(token -k registration -b "${OWNER_SUB}" -s 'tenant.claim')"
 call tolo.tenant.v1.TenantService/ClaimTenantOwnership \
-    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" '{tenantId: $t, ownershipClaimToken: $c}')" \
+    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" --arg s "${TENANT_SUBDOMAIN}" '{tenantId: $t, ownershipClaimToken: $c, subdomain: $s}')" \
     "${registration_token}"
 expect 200
 

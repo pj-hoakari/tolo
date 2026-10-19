@@ -4,13 +4,12 @@ services:
             - observation
 
     observation:
-        image: ${TOLO_OBS_IMAGE:-tolo-observation:60f9280}
+        image: ${TOLO_OBS_IMAGE:-tolo-observation:0013e6f}
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#60f9280e53ad25265e9833399afc5a381f7f60cd
+            context: https://github.com/pj-hoakari/tolo-observation.git#0013e6f181906bbfc59d690ed66269eaf5ae7bb0
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://observation-db:5432/observation?sslmode=disable&user=observation&password=${TOLO_OBS_DB_PASSWORD:-observation}
-            OBSERVATION_PAGE_URL_TEMPLATE: http://{tenant_id}.localhost:3000/event/{event_id}/observation/{edge_device_id}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
             INTERNAL_JWT_ISSUER: service-gateway
             INTERNAL_JWT_AUDIENCE: tolo-observation
@@ -28,9 +27,9 @@ services:
                 condition: service_started
 
     observation-migrate:
-        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:60f9280}
+        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:0013e6f}
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#60f9280e53ad25265e9833399afc5a381f7f60cd
+            context: https://github.com/pj-hoakari/tolo-observation.git#0013e6f181906bbfc59d690ed66269eaf5ae7bb0
             target: migrate
         command:
             - -database
