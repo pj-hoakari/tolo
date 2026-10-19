@@ -15,8 +15,8 @@ env:
         sh: echo "${TOLO_OWNER_SUB:-user-owner}"
 
 vars:
-    FAKEIDP_IMAGE: tolo-fakeidp:0000183
-    FAKEIDP_CONTEXT: https://github.com/pj-hoakari/tolo-service-gateway.git#0000183f141660e5293802207e19c7ab3faf5a60
+    FAKEIDP_IMAGE: tolo-fakeidp:9eb734f
+    FAKEIDP_CONTEXT: https://github.com/pj-hoakari/tolo-service-gateway.git#9eb734f910402fb3c5f74b54789a4ce36393e1cc
     TOKEN_TTL_SECONDS: "86400"
 
 tasks:

@@ -57,6 +57,7 @@ steps:
             application/json:
               tenantId: "{{ steps.startTenant.res.body.tenant.tenantId }}"
               ownershipClaimToken: "{{ steps.startTenant.res.body.ownershipClaimToken }}"
+              subdomain: '"int-{{ now().UnixNano() }}"'
     test: current.res.status == 200
   ownerToken:
     idp:
@@ -153,6 +154,6 @@ steps:
         "tenantId": steps.startTenant.res.body.tenant.tenantId,
         "eventId": steps.createEvent.res.body.event.eventId,
         "edgeDeviceId": steps.registerEdgeDevice.res.body.device.edgeDeviceId,
-        "observationPageUrl": steps.registerEdgeDevice.res.body.observationPageUrl,
+        "observationPagePath": steps.registerEdgeDevice.res.body.observationPagePath,
         "observationPoints": map(steps.registerEdgeDevice.res.body.device.observationPoints, { {"observationPointId": .observationPointId, "routeId": .name} })
       }

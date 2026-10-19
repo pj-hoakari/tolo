@@ -7,6 +7,7 @@ OWNER_SUB="${OWNER_SUB:-user-owner}"
 OUTSIDER_SUB="${OUTSIDER_SUB:-user-outsider}"
 MEMBER_SUB="${MEMBER_SUB:-user-staff}"
 TENANT_NAME="${TENANT_NAME:-acme-$$-${RANDOM}}"
+TENANT_SUBDOMAIN="${TENANT_SUBDOMAIN:-onb-$$-${RANDOM}}"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 token_script="${script_dir}/fakeidp-token.sh"
@@ -51,7 +52,7 @@ printf 'tenant_id=%s\n' "${tenant_id}"
 printf '\n# 2. ClaimTenantOwnership with a registration token\n'
 registration_token="$(token -k registration -b "${OWNER_SUB}" -s 'tenant.claim')"
 call tolo.tenant.v1.TenantService/ClaimTenantOwnership \
-    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" '{tenantId: $t, ownershipClaimToken: $c}')" \
+    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" --arg s "${TENANT_SUBDOMAIN}" '{tenantId: $t, ownershipClaimToken: $c, subdomain: $s}')" \
     "${registration_token}"
 expect 200
 

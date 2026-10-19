@@ -4,9 +4,9 @@ services:
             - tenant-management
 
     tenant-management:
-        image: ${TOLO_TM_IMAGE:-tolo-tenant-management:fbfa436}
+        image: ${TOLO_TM_IMAGE:-tolo-tenant-management:00b472c}
         build:
-            context: https://github.com/pj-hoakari/tolo-tenant-management.git#fbfa4367b6d9c0a61f3fbef913015e2b74fce50c
+            context: https://github.com/pj-hoakari/tolo-tenant-management.git#00b472cade6e551e1fd4858c08e85cb992d957d4
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://tenant-management-db:5432/tenant_management?sslmode=disable&user=tenant_management&password=${TOLO_TM_DB_PASSWORD:-tenant_management}
@@ -23,9 +23,9 @@ services:
                 condition: service_started
 
     tenant-management-migrate:
-        image: ${TOLO_TM_MIGRATE_IMAGE:-tolo-tenant-management-migrate:fbfa436}
+        image: ${TOLO_TM_MIGRATE_IMAGE:-tolo-tenant-management-migrate:00b472c}
         build:
-            context: https://github.com/pj-hoakari/tolo-tenant-management.git#fbfa4367b6d9c0a61f3fbef913015e2b74fce50c
+            context: https://github.com/pj-hoakari/tolo-tenant-management.git#00b472cade6e551e1fd4858c08e85cb992d957d4
             target: migrate
         command:
             - -database
@@ -44,6 +44,7 @@ services:
             - psql
             - --set=ON_ERROR_STOP=1
             - --set=tenant_id=${TOLO_TENANT_ID:-0123456789abcdef}
+            - --set=tenant_subdomain=${TOLO_TENANT_SUBDOMAIN:-test}
             - --set=event_id=${TOLO_EVENT_ID:-fedcba9876543210}
             - --set=owner_sub=${TOLO_OWNER_SUB:-user-owner}
             - --file=/seed/tenant-management.sql
