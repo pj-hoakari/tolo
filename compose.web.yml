@@ -8,9 +8,9 @@ services:
             - web
 
     web:
-        image: ${TOLO_WEB_IMAGE:-tolo-web:619232b}
+        image: ${TOLO_WEB_IMAGE:-tolo-web:74ce0f4}
         build:
-            context: https://github.com/pj-hoakari/tolo-web.git#619232b780407d8092775a69ccd40cbcbb2c5ae9
+            context: https://github.com/pj-hoakari/tolo-web.git#74ce0f4ab530d618d25784d1335b5fae2d95b9c3
             target: dev
             secrets:
                 - npm_token
@@ -23,6 +23,7 @@ services:
             GATEWAY_URL: http://server:8080
             SIGNALING_URL: http://edge-bridge:8787
             OBSERVATION_API_MOCKING: disabled
+            TENANT_SUBDOMAIN_MOCKING: disabled
             GRAPH_ACCESS_TOKEN: ${GRAPH_ACCESS_TOKEN:-}
             OBSERVATION_ACCESS_TOKEN: ${OBSERVATION_ACCESS_TOKEN:-}
             TENANT_ACCESS_TOKEN: ${TENANT_ACCESS_TOKEN:-}
