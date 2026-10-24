@@ -123,8 +123,12 @@ read_notification() {
     curl -sS -o /tmp/tolo-delivery-notification.json -w '%{http_code}' -H "Authorization: Bearer ${id_token}" \
         "${FIRESTORE_BASE_URL}/v1/projects/demo-tolo/databases/(default)/documents/deliveryNotifications/$1"
 }
-notification_status="$(read_notification "${proposal_event_id}")"
-latest="$(jq -r '.fields.latestDeliveryId.stringValue // empty' /tmp/tolo-delivery-notification.json)"
+for _ in $(seq 1 20); do
+    notification_status="$(read_notification "${proposal_event_id}")"
+    latest="$(jq -r '.fields.latestDeliveryId.stringValue // empty' /tmp/tolo-delivery-notification.json)"
+    [ "${notification_status}" = 200 ] && [ "${latest}" = "${delivery_id}" ] && break
+    sleep 1
+done
 [ "${notification_status}" = 200 ] && [ "${latest}" = "${delivery_id}" ] \
     || { printf 'NG: deliveryNotifications/%s -> HTTP %s latestDeliveryId=%s\n' "${proposal_event_id}" "${notification_status}" "${latest}" >&2; exit 1; }
 printf 'ok: deliveryNotifications/%s is readable and its latestDeliveryId is %s\n' "${proposal_event_id}" "${delivery_id}"

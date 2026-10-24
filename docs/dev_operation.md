@@ -66,7 +66,7 @@ PostgreSQL のパスワードは `TOLO_OP_DB_PASSWORD` で変えられる（既�
 | Firestore の `deliveryNotifications/<runn が作ったイベント>` | `200`。`latestDeliveryId` が `SendPush` と同じ `delivery_id` |
 | Firestore の `deliveryNotifications/<固定のイベント>` | `403`。トークンのイベントと違うので、ルールが読み取りを拒む |
 
-届くまでの遅れを見込み、5 の確認は 1 秒おきに 20 回まで呼び直す  
+届くまでの遅れを見込み、5 と 6 の確認は 1 秒おきに 20 回まで呼び直す。Realtime は配信ログに書いてから Firestore の文書を書くので、`FetchDeliveries` が返した時点では文書がまだないことがある  
 Guest Service の復旧 pull は起動時と 10 分おきなので、確認の時間内に届いたものは push で届いたことになる
 
 ログは、スクリプトの開始より後のものだけを読む  
