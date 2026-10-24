@@ -78,23 +78,6 @@ services:
             nats:
                 condition: service_healthy
 
-    push-relay-ready:
-        image: alpine/openssl:3.5.8@sha256:3f25da71f70eba788067daac3f3df03bd1de7a7c52ed89fa93b94ad2c92d986b
-        entrypoint: ["/bin/sh", "-c"]
-        command:
-            - |
-              for _ in $$(seq 1 60); do
-                wget -q -O /dev/null http://push-relay:8080/readyz && exit 0
-                sleep 1
-              done
-              exit 1
-        networks:
-            - push
-        depends_on:
-            push-relay:
-                condition: service_started
-        restart: "no"
-
     push-receiver:
         image: mendhak/http-https-echo:42@sha256:a265f55c86cb3baead76fdf379dc8e9e6440ed121874e101e60b833e05bce8d4
         environment:
