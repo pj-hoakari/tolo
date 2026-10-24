@@ -48,7 +48,7 @@ expect_unreachable() {
 }
 
 backends=''
-for svc in testbackend tenant-management graph-authoring observation operation; do
+for svc in testbackend tenant-management graph-authoring observation operation guest realtime; do
     is_running "${svc}" && backends="${backends} ${svc}"
 done
 stores="$(printf '%s\n' "${running}" | grep -E -- '-db$|^flow-control$' || true)"
@@ -56,7 +56,7 @@ stores="$(printf '%s\n' "${running}" | grep -E -- '-db$|^flow-control$' || true)
 if docker compose port server 8090 >/dev/null 2>&1; then
     fail 'server:8090 is published to the host'
 fi
-for svc in ${backends} ${stores} nats push-relay push-receiver; do
+for svc in ${backends} ${stores} nats push-relay; do
     if [ -n "$(docker compose ps --format json "${svc}" | jq -r '.Publishers[]? | select(.PublishedPort > 0) | .PublishedPort')" ]; then
         fail "${svc} publishes a port to the host"
     fi
@@ -82,14 +82,22 @@ for from in ${stores}; do
 done
 
 expect_reachable push-relay nats 4222
-expect_reachable push-relay push-receiver 8080
+for to in ${backends}; do
+    case "${to}" in
+        guest | realtime) expect_reachable push-relay "${to}" 8080 ;;
+        *) expect_unreachable push-relay "${to}" 8080 ;;
+    esac
+done
 for from in ${backends} ${stores}; do
     case "${from}" in
         operation | observation) expect_reachable "${from}" nats 4222 ;;
         *) expect_unreachable "${from}" nats 4222 ;;
     esac
-    expect_unreachable "${from}" push-receiver 8080
 done
+
+if is_running realtime && is_running firebase-emulator; then
+    expect_reachable realtime firebase-emulator 8080
+fi
 
 if [ "${failures}" -ne 0 ]; then
     printf '%d reachability check(s) failed\n' "${failures}" >&2

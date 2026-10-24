@@ -4,6 +4,8 @@
     "tolo-tenant-management": { "url": "http://tenant-management:8080" },
     "tolo-graph-authoring": { "url": "http://graph-authoring:8080" },
     "tolo-observation": { "url": "http://observation:8080" },
-    "tolo-operation": { "url": "http://operation:8080" }
+    "tolo-operation": { "url": "http://operation:8080" },
+    "tolo-guest": { "url": "http://guest:8080" },
+    "tolo-realtime": { "url": "http://realtime:8080" }
   }
 }

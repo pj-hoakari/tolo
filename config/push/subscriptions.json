@@ -1,5 +1,5 @@
 [
-    {"name": "guest-messages", "topic": "guest-messages", "url": "http://push-receiver:8080/push/guest-messages"},
-    {"name": "guest-status", "topic": "guest-status", "url": "http://push-receiver:8080/push/guest-status"},
-    {"name": "realtime-delivery", "topic": "realtime-delivery", "url": "http://push-receiver:8080/push/realtime-delivery"}
+    {"name": "guest-messages", "topic": "guest-messages", "url": "http://guest:8080/push/guest-messages"},
+    {"name": "guest-status", "topic": "guest-status", "url": "http://guest:8080/push/guest-status"},
+    {"name": "realtime-delivery", "topic": "realtime-delivery", "url": "http://realtime:8080/push/realtime-delivery"}
 ]

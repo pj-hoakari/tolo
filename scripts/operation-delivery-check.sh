@@ -23,7 +23,9 @@ found=''
 call() {
     local procedure="$1" payload="$2" token="$3"
     local response
-    response="$(curl -sS -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer ${token}" \
+    local auth=()
+    [ -z "${token}" ] || auth=(-H "Authorization: Bearer ${token}")
+    response="$(curl -sS -X POST -H 'Content-Type: application/json' ${auth[@]+"${auth[@]}"} \
         -d "${payload}" -w '\n%{http_code}' "${GATEWAY_BASE_URL}/${procedure}")"
     status="${response##*$'\n'}"
     body="${response%$'\n'*}"
@@ -83,13 +85,28 @@ require_log operation 'SendPush to staff-offline' \
 delivery_id="$(printf '%s' "${found}" | jq -r '.data.delivery_id')"
 proposal_event_id="$(printf '%s' "${found}" | jq -r '.event_id')"
 
-printf '\n# 5. the relay pushed the published messages from NATS JetStream to the receiver\n'
-push_filter() {
-    printf 'select(.path == "/push/%s" and .method == "POST" and .headers["content-type"] == "application/octet-stream" and .headers["x-goog-pubsub-ordering-key"] == "%s" and (.headers["x-goog-pubsub-message-id"] | length > 0) and (.headers["x-goog-pubsub-publish-time"] | length > 0)%s) | {path, headers: (.headers | with_entries(select(.key | startswith("x-goog-pubsub-"))))}' "$1" "$2" "$3"
+printf '\n# 5. the relay pushed the published messages from NATS JetStream to Guest Service and Realtime\n'
+eventually() {
+    local label="$1" filter="$2"
+    shift 2
+    for _ in $(seq 1 20); do
+        call "$@"
+        [ "${status}" = 200 ] && printf '%s' "${body}" | jq -e "${filter}" >/dev/null && { printf 'ok: %s\n' "${label}"; return; }
+        sleep 1
+    done
+    printf 'NG: %s\n' "${label}" >&2
+    exit 1
 }
-require_log push-receiver "guest-messages push of ${message_id}" "$(push_filter guest-messages "${EVENT_ID}" " and (.body | contains(\"${message_id}\"))")"
-require_log push-receiver "realtime-delivery push of ${delivery_id} to staff-online" \
-    "$(push_filter realtime-delivery "${proposal_event_id}" " and (.body | contains(\"${delivery_id}\")) and (.body | contains(\"staff-online\"))")"
-require_log push-receiver 'guest-status push' "$(push_filter guest-status "${proposal_event_id}" '')"
+eventually "Guest Service lists the GUEST message ${message_id}" \
+    "any(.messages[]?; .messageId == \"${message_id}\" and .body == \"Gate B is open\")" \
+    tolo.guest.v1.GuestPageService/ListGuestMessages "$(jq -nc --arg e "${EVENT_ID}" '{eventId: $e}')" ''
+eventually "Guest Service has the guest status of ${proposal_event_id}" \
+    '.takenAt | length > 0' \
+    tolo.guest.v1.GuestPageService/GetCrowd "$(jq -nc --arg e "${proposal_event_id}" '{eventId: $e}')" ''
+staff_token="$(FAKEIDP_BASE_URL="${FAKEIDP_BASE_URL}" "${token_script}" -k event_access -b staff-online -c console-ui \
+    -t "${TENANT_ID}" -e "${proposal_event_id}" -s 'events.read')"
+eventually "Realtime returns delivery ${delivery_id} to staff-online" \
+    "any(.envelopes[]?; .deliveryId == \"${delivery_id}\")" \
+    tolo.realtime.v1.RealtimeFetchService/FetchDeliveries "$(jq -nc --arg e "${proposal_event_id}" '{eventId: $e}')" "${staff_token}"
 
 printf '\nall steps behaved as expected (message_id=%s delivery_id=%s)\n' "${message_id}" "${delivery_id}"

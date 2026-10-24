@@ -1,0 +1,75 @@
+services:
+    push-relay:
+        networks:
+            - push-guest
+
+    server:
+        networks:
+            - guest
+
+    guest:
+        image: ${TOLO_GUEST_IMAGE:-tolo-guest:2a34192}
+        build:
+            context: https://github.com/pj-hoakari/tolo-guest.git#2a3419217b4e66a58295143445b8eabbca1bb900
+        environment:
+            SERVER_ADDR: :8080
+            DATABASE_URL: postgres://guest-db:5432/guest?sslmode=disable&user=guest&password=${TOLO_GUEST_DB_PASSWORD:-guest}
+            INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
+            INTERNAL_JWT_ISSUER: service-gateway
+            INTERNAL_JWT_AUDIENCE: tolo-guest
+            OBSERVATION_URL: http://server:8090
+            OPERATION_URL: http://server:8090
+            GRAPH_AUTHORING_URL: http://server:8090
+        networks:
+            - guest
+            - guest-db
+            - push-guest
+        depends_on:
+            guest-migrate:
+                condition: service_completed_successfully
+            server:
+                condition: service_started
+
+    guest-migrate:
+        image: ${TOLO_GUEST_MIGRATE_IMAGE:-tolo-guest-migrate:2a34192}
+        build:
+            context: https://github.com/pj-hoakari/tolo-guest.git#2a3419217b4e66a58295143445b8eabbca1bb900
+            target: migrate
+        command:
+            - -database
+            - postgres://guest-db:5432/guest?sslmode=disable&user=guest&password=${TOLO_GUEST_DB_PASSWORD:-guest}
+            - up
+        networks:
+            - guest-db
+        depends_on:
+            guest-db:
+                condition: service_healthy
+        restart: "no"
+
+    guest-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: guest
+            POSTGRES_USER: guest
+            POSTGRES_PASSWORD: ${TOLO_GUEST_DB_PASSWORD:-guest}
+        networks:
+            - guest-db
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+        volumes:
+            - guest-data:/var/lib/postgresql
+
+volumes:
+    guest-data:
+
+networks:
+    guest:
+        internal: true
+    guest-db:
+        internal: true
+    push-guest:
+        internal: true

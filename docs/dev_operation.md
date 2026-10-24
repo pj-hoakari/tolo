@@ -6,13 +6,13 @@ Observation は Flow Control の `Optimize` の後に、Gateway の内部用 lis
 Operation は、そのイベントで接続状態を登録したスタッフのうち、接続中のスタッフには Realtime へ、未接続のスタッフには Notification の `SendPush` で提案を届ける  
 Realtime への配信は `realtime-delivery` へ、スタッフのメッセージのうち来場者向けのものは `guest-messages` へ、NATS JetStream を通して publish する
 
-Realtime・Notification・Guest Service はこの環境に含めていない  
-そのため publish したメッセージは、中継の `push-relay` が受け口の代わりの `push-receiver` へ届ける。`SendPush` は当面ログに出すだけのスケルトンになる
+publish したメッセージは、中継の `push-relay` が Guest Service と Realtime の受け口へ届ける  
+Notification はこの環境に含めていないので、`SendPush` は当面ログに出すだけのスケルトンになる
 
 ## 構成
 
 ```bash
-export COMPOSE_FILE=compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.op.yml:compose.flow.yml
+export COMPOSE_FILE=compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.op.yml:compose.flow.yml:compose.edge.yml:compose.guest.yml:compose.rt.yml
 docker compose up -d
 task fakeidp:up
 ```
@@ -43,7 +43,7 @@ PostgreSQL のパスワードは `TOLO_OP_DB_PASSWORD` で変えられる（既�
 2. runn の `integration-proposal.yml` を `surgeStart` を `0` にして実行する。runbook は事前データを作った後、`staff-online`（接続中）と `staff-offline`（未接続）の接続状態を、それぞれの `sub` のトークンで `UpdateConnectionState` に登録する。続けて、迂回路の提案が保存されるまで計測値を送る
 3. Gateway の監査ログで、`caller_service=tolo-observation` の `RequestProposalDelivery` と `RecordFeedbackValues` が `http_status=200` であることを確かめる
 4. Operation のログで、`SendPush` のスケルトンの出力を確かめる
-5. `push-receiver` のログで、中継が `guest-messages`・`realtime-delivery`・`guest-status` を届けたことを確かめる
+5. 中継が届けた内容を、受け取ったサービスの RPC で確かめる。Guest Service の `ListGuestMessages` と `GetCrowd` は匿名で、Realtime の `FetchDeliveries` は `staff-online` の `event_access` トークン（scope `events.read`）で呼ぶ
 
 `UpdateConnectionState` は、`userId` がトークンの `sub` と一致しないと拒否する。そのためスタッフごとにトークンを発行する  
 提案はホストから直接は出せないので、Observation に実際の観測サイクルを回させて出す  
@@ -59,13 +59,12 @@ PostgreSQL のパスワードは `TOLO_OP_DB_PASSWORD` で変えられる（既�
 | `ListStaffMessages`（`AUDIENCE_GUEST`） | `200`。送ったメッセージを含む |
 | 監査ログの `RequestProposalDelivery`・`RecordFeedbackValues` | `caller_service=tolo-observation`・`token_use=service` の記録が `http_status=200` |
 | ログの `notification SendPush (log-only skeleton)` | `recipient_user_ids` が `["staff-offline"]` |
-| `push-receiver` の `/push/guest-messages` | 本文が送ったメッセージの ID を含む |
-| `push-receiver` の `/push/realtime-delivery` | 本文が `SendPush` と同じ `delivery_id` と `staff-online` を含む |
-| `push-receiver` の `/push/guest-status` | Observation が観測サイクルごとに publish したもの |
+| Guest Service の `ListGuestMessages`（固定のイベント） | 送ったメッセージを、送った本文で含む |
+| Guest Service の `GetCrowd`（runn が作ったイベント） | `takenAt` が空でない。Observation が観測サイクルごとに publish した `guest-status` が届いている |
+| Realtime の `FetchDeliveries`（runn が作ったイベント、`staff-online`） | `SendPush` と同じ `delivery_id` の配信を含む |
 
-`push-receiver` の 3 つは、どれも `Content-Type` が `application/octet-stream` で、`x-goog-pubsub-ordering-key`・`x-goog-pubsub-message-id`・`x-goog-pubsub-publish-time` が空でない  
-`/push/guest-messages` の `x-goog-pubsub-ordering-key` は固定のイベントの ID になる。残りの 2 つは、runn が作ったイベントの ID で、`SendPush` のログの `event_id` と同じになる  
-本文は proto のバイト列なので、ID は本文に文字列として含まれるかで確かめる
+届くまでの遅れを見込み、5 の確認は 1 秒おきに 20 回まで呼び直す  
+Guest Service の復旧 pull は起動時と 10 分おきなので、確認の時間内に届いたものは push で届いたことになる
 
 ログは、スクリプトの開始より後のものだけを読む  
 この確認は GitHub Actions の `E2E` でも、Observation の確認の後に走る。提案を待つ分、`E2E` の時間は 6 分ほど延びる

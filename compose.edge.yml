@@ -1,8 +1,8 @@
 services:
     firebase-emulator:
-        image: ${TOLO_FIREBASE_EMULATOR_IMAGE:-tolo-firebase-emulator:e5a530c}
+        image: ${TOLO_FIREBASE_EMULATOR_IMAGE:-tolo-firebase-emulator:3063bd9}
         build:
-            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#e5a530c0eecbf7d765a83f5523994124c645f594:firebase-emulator
+            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#3063bd931d6f9e49aa5cbf8be61f788a5856cbb8:firebase-emulator
         ports:
             - "8081:8080"
             - "9099:9099"

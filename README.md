@@ -37,18 +37,20 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 ## compose ファイル
 
 構成は `compose.yml` に、サービスごとのオーバーライドを重ねる形になる  
-`Taskfile.yml` は、`COMPOSE_FILE` が未設定なら `compose.yml`・`compose.tm.yml`・`compose.ga.yml`・`compose.obs.yml`・`compose.op.yml`・`compose.flow.yml`・`compose.edge.yml`・`compose.web.yml` を重ねる  
+`Taskfile.yml` は、`COMPOSE_FILE` が未設定なら `compose.yml`・`compose.tm.yml`・`compose.ga.yml`・`compose.obs.yml`・`compose.op.yml`・`compose.flow.yml`・`compose.edge.yml`・`compose.guest.yml`・`compose.rt.yml`・`compose.web.yml` を重ねる  
 プロジェクト名は `tolo` になる
 
 | ファイル | 加えるもの |
 | --- | --- |
-| `compose.yml` | `keygen`、Service Gateway（`server`、ホストの 8080）、NATS JetStream（`nats`）、中継の jetstream-http-push（`push-relay`）と受け口の代わり（`push-receiver`） |
+| `compose.yml` | `keygen`、Service Gateway（`server`、ホストの 8080）、NATS JetStream（`nats`）、中継の jetstream-http-push（`push-relay`） |
 | `compose.tm.yml` | Tenant Management とその DB・マイグレーション・固定テナントの seed |
 | `compose.ga.yml` | Graph Authoring とその DB・マイグレーション |
 | `compose.obs.yml` | Observation とその DB・マイグレーション |
 | `compose.op.yml` | Operation とその DB・マイグレーション |
 | `compose.flow.yml` | Flow Control と、profile `runn` の `runn` |
 | `compose.edge.yml` | Firebase Emulator（ホストの 8081・9099・4000）と edge-bridge（ホストの 8787） |
+| `compose.guest.yml` | Guest Service とその DB・マイグレーション |
+| `compose.rt.yml` | Realtime とその DB・マイグレーション。`compose.edge.yml` の Firebase Emulator を使う |
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
 | `compose.idp.yml` | 実物の IdP（tolo-idp）。`server` はホストの 18090 に移る |
 | `compose.o11y.yml` | Jaeger |
@@ -58,10 +60,9 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 Operation と Observation は、情報更新の push を NATS JetStream へ publish する  
 ストリームは Operation と Observation が起動時に作り、保存期限は両方に渡す `NATS_STREAM_MAX_AGE`（`24h`）で決まる  
 `push-relay` は JetStream から読み、`config/push/subscriptions.json` の購読ごとに受け口へ `POST` する  
-Realtime・Notification・Guest Service は、まだこの環境に含めていない  
-そのため購読の宛先は、受け取ったリクエストを 1 行の JSON でログに出して 200 を返す `push-receiver` にしてある  
-Notification の `SendPush` は、当面ログに出すだけのスケルトンになる  
-`nats` に届くのは `operation`・`observation`・`push-relay` だけで、`push-receiver` に届くのは `push-relay` だけになる  
+購読の宛先は、`guest-status` と `guest-messages` が Guest Service（`guest`）、`realtime-delivery` が Realtime（`realtime`）の `/push/<トピック>` になる  
+Notification はまだこの環境に含めておらず、`SendPush` は当面ログに出すだけのスケルトンになる  
+`nats` に届くのは `operation`・`observation`・`push-relay` だけで、`guest` と `realtime` の 8080 に届くのは `server` と `push-relay` だけになる  
 `operation` と `observation` は、`push-relay` の `/readyz` が 200 を返してから起動する。購読に届くのは consumer を作った後に publish されたメッセージだけだからである
 
 ## イメージの差し替え
@@ -81,6 +82,10 @@ Notification の `SendPush` は、当面ログに出すだけのスケルトン�
 | `TOLO_OBS_MIGRATE_IMAGE` | `observation-migrate` | tolo-observation の固定コミットからビルド |
 | `TOLO_OP_IMAGE` | `operation` | tolo-operation の固定コミットからビルド |
 | `TOLO_OP_MIGRATE_IMAGE` | `operation-migrate` | tolo-operation の固定コミットからビルド |
+| `TOLO_GUEST_IMAGE` | `guest` | tolo-guest の固定コミットからビルド |
+| `TOLO_GUEST_MIGRATE_IMAGE` | `guest-migrate` | tolo-guest の固定コミットからビルド |
+| `TOLO_RT_IMAGE` | `realtime` | tolo-realtime の固定コミットからビルド |
+| `TOLO_RT_MIGRATE_IMAGE` | `realtime-migrate` | tolo-realtime の固定コミットからビルド |
 | `TOLO_FLOW_IMAGE` | `flow-control` | tolo-flow-control の固定コミットからビルド |
 | `TOLO_EDGE_BRIDGE_IMAGE` | `edge-bridge` | tolo-edge-bridge の固定コミットからビルド |
 | `TOLO_FIREBASE_EMULATOR_IMAGE` | `firebase-emulator` | tolo-edge-bridge の固定コミットからビルド |
