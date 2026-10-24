@@ -25,9 +25,9 @@ services:
             - operation
 
     operation:
-        image: ${TOLO_OP_IMAGE:-tolo-operation:3ab2140}
+        image: ${TOLO_OP_IMAGE:-tolo-operation:57b04d5}
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#3ab21400ece2cbe1c770b1de7a2fad18b083857a
+            context: https://github.com/pj-hoakari/tolo-operation.git#57b04d521763c32ca877c324c85a5864280203f6
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://operation-db:5432/operation?sslmode=disable&user=operation&password=${TOLO_OP_DB_PASSWORD:-operation}
@@ -35,6 +35,7 @@ services:
             INTERNAL_JWT_ISSUER: service-gateway
             INTERNAL_JWT_AUDIENCE: tolo-operation
             NATS_URL: nats://nats:4222
+            NATS_STREAM_MAX_AGE: 24h
         networks:
             - operation
             - operation-db
@@ -48,9 +49,9 @@ services:
                 condition: service_started
 
     operation-migrate:
-        image: ${TOLO_OP_MIGRATE_IMAGE:-tolo-operation-migrate:3ab2140}
+        image: ${TOLO_OP_MIGRATE_IMAGE:-tolo-operation-migrate:57b04d5}
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#3ab21400ece2cbe1c770b1de7a2fad18b083857a
+            context: https://github.com/pj-hoakari/tolo-operation.git#57b04d521763c32ca877c324c85a5864280203f6
             target: migrate
         command:
             - -database

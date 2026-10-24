@@ -56,6 +56,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 `web` には `GATEWAY_URL=http://server:8080` と `SIGNALING_URL=http://edge-bridge:8787` を渡し、モックを無効にしてある
 
 Operation と Observation は、情報更新の push を NATS JetStream へ publish する  
+ストリームは Operation と Observation が起動時に作り、保存期限は両方に渡す `NATS_STREAM_MAX_AGE`（`24h`）で決まる  
 `push-relay` は JetStream から読み、`config/push/subscriptions.json` の購読ごとに受け口へ `POST` する  
 Realtime・Notification・Guest Service は、まだこの環境に含めていない  
 そのため購読の宛先は、受け取ったリクエストを 1 行の JSON でログに出して 200 を返す `push-receiver` にしてある  
