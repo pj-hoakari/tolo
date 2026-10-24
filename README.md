@@ -42,7 +42,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 
 | ファイル | 加えるもの |
 | --- | --- |
-| `compose.yml` | `keygen` と Service Gateway（`server`、ホストの 8080） |
+| `compose.yml` | `keygen`、Service Gateway（`server`、ホストの 8080）、NATS JetStream（`nats`）、中継の jetstream-http-push（`push-relay`）と受け口の代わり（`push-receiver`） |
 | `compose.tm.yml` | Tenant Management とその DB・マイグレーション・固定テナントの seed |
 | `compose.ga.yml` | Graph Authoring とその DB・マイグレーション |
 | `compose.obs.yml` | Observation とその DB・マイグレーション |
@@ -55,8 +55,13 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 
 `web` には `GATEWAY_URL=http://server:8080` と `SIGNALING_URL=http://edge-bridge:8787` を渡し、モックを無効にしてある
 
+Operation と Observation は、情報更新の push を NATS JetStream へ publish する  
+`push-relay` は JetStream から読み、`config/push/subscriptions.json` の購読ごとに受け口へ `POST` する  
 Realtime・Notification・Guest Service は、まだこの環境に含めていない  
-そのため Operation から外へ送るもの（Pub/Sub の `guest-messages`・`realtime-delivery` への publish と、Notification の `SendPush`）は、当面ログに出すだけのスケルトンになる
+そのため購読の宛先は、受け取ったリクエストを 1 行の JSON でログに出して 200 を返す `push-receiver` にしてある  
+Notification の `SendPush` は、当面ログに出すだけのスケルトンになる  
+`nats` に届くのは `operation`・`observation`・`push-relay` だけで、`push-receiver` に届くのは `push-relay` だけになる  
+`operation` と `observation` は、`push-relay` の `/readyz` が 200 を返してから起動する。購読に届くのは consumer を作った後に publish されたメッセージだけだからである
 
 ## イメージの差し替え
 
@@ -66,6 +71,7 @@ Realtime・Notification・Guest Service は、まだこの環境に含めてい�
 | 環境変数 | サービス | 既定 |
 | --- | --- | --- |
 | `TOLO_GATEWAY_IMAGE` | `server` | tolo-service-gateway の固定コミットからビルド |
+| `TOLO_PUSH_RELAY_IMAGE` | `push-relay` | jetstream-http-push の固定コミットからビルド |
 | `TOLO_TM_IMAGE` | `tenant-management` | tolo-tenant-management の固定コミットからビルド |
 | `TOLO_TM_MIGRATE_IMAGE` | `tenant-management-migrate` | tolo-tenant-management の固定コミットからビルド |
 | `TOLO_GA_IMAGE` | `graph-authoring` | tolo-graph-authoring の固定コミットからビルド |

@@ -1,35 +1,43 @@
 services:
+    nats:
+        networks:
+            - observation-nats
+
     server:
         networks:
             - observation
 
     observation:
-        image: ${TOLO_OBS_IMAGE:-tolo-observation:0013e6f}
+        image: ${TOLO_OBS_IMAGE:-tolo-observation:4a1a56f}
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#0013e6f181906bbfc59d690ed66269eaf5ae7bb0
+            context: https://github.com/pj-hoakari/tolo-observation.git#4a1a56f9171d8894d0fd2f23185f23b2bd9a949b
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://observation-db:5432/observation?sslmode=disable&user=observation&password=${TOLO_OBS_DB_PASSWORD:-observation}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
             INTERNAL_JWT_ISSUER: service-gateway
             INTERNAL_JWT_AUDIENCE: tolo-observation
+            NATS_URL: nats://nats:4222
             GRAPH_AUTHORING_URL: http://server:8090
             FLOW_CONTROL_URL: http://flow-control:8080
             OPERATION_URL: http://server:8090
         networks:
             - observation
             - observation-db
+            - observation-nats
             - flow-control
         depends_on:
             observation-migrate:
+                condition: service_completed_successfully
+            push-relay-ready:
                 condition: service_completed_successfully
             server:
                 condition: service_started
 
     observation-migrate:
-        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:0013e6f}
+        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:4a1a56f}
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#0013e6f181906bbfc59d690ed66269eaf5ae7bb0
+            context: https://github.com/pj-hoakari/tolo-observation.git#4a1a56f9171d8894d0fd2f23185f23b2bd9a949b
             target: migrate
         command:
             - -database
@@ -66,6 +74,8 @@ networks:
     observation:
         internal: true
     observation-db:
+        internal: true
+    observation-nats:
         internal: true
     flow-control:
         internal: true
