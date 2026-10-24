@@ -77,13 +77,19 @@ for procedure in RequestProposalDelivery RecordFeedbackValues; do
         "select(.audit.method? == \"/tolo.operation.v1.DeliveryCoordinationService/${procedure}\" and .audit.caller_service == \"tolo-observation\" and .audit.http_status == 200) | .audit"
 done
 
-printf '\n# 4. the log-only skeletons\n'
-require_log operation "guest-messages publish of ${message_id}" \
-    "select(.message == \"pubsub publish (log-only skeleton)\" and .topic == \"guest-messages\" and any(.payload.upserts[]?; .message_id == \"${message_id}\"))"
+printf '\n# 4. the SendPush log-only skeleton\n'
 require_log operation 'SendPush to staff-offline' \
     'select(.message == "notification SendPush (log-only skeleton)" and .recipient_user_ids == ["staff-offline"])'
 delivery_id="$(printf '%s' "${found}" | jq -r '.data.delivery_id')"
-require_log operation "realtime-delivery publish of ${delivery_id} to staff-online" \
-    "select(.message == \"pubsub publish (log-only skeleton)\" and .topic == \"realtime-delivery\" and .payload.delivery_id == \"${delivery_id}\" and .payload.recipient_user_ids == [\"staff-online\"]) | del(.payload.payload)"
+proposal_event_id="$(printf '%s' "${found}" | jq -r '.event_id')"
+
+printf '\n# 5. the relay pushed the published messages from NATS JetStream to the receiver\n'
+push_filter() {
+    printf 'select(.path == "/push/%s" and .method == "POST" and .headers["content-type"] == "application/octet-stream" and .headers["x-goog-pubsub-ordering-key"] == "%s" and (.headers["x-goog-pubsub-message-id"] | length > 0) and (.headers["x-goog-pubsub-publish-time"] | length > 0)%s) | {path, headers: (.headers | with_entries(select(.key | startswith("x-goog-pubsub-"))))}' "$1" "$2" "$3"
+}
+require_log push-receiver "guest-messages push of ${message_id}" "$(push_filter guest-messages "${EVENT_ID}" " and (.body | contains(\"${message_id}\"))")"
+require_log push-receiver "realtime-delivery push of ${delivery_id} to staff-online" \
+    "$(push_filter realtime-delivery "${proposal_event_id}" " and (.body | contains(\"${delivery_id}\")) and (.body | contains(\"staff-online\"))")"
+require_log push-receiver 'guest-status push' "$(push_filter guest-status "${proposal_event_id}" '')"
 
 printf '\nall steps behaved as expected (message_id=%s delivery_id=%s)\n' "${message_id}" "${delivery_id}"

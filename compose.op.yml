@@ -1,31 +1,56 @@
 services:
+    nats:
+        networks:
+            - operation-nats
+
+    push-relay-ready:
+        image: alpine/openssl:3.5.8@sha256:3f25da71f70eba788067daac3f3df03bd1de7a7c52ed89fa93b94ad2c92d986b
+        entrypoint: ["/bin/sh", "-c"]
+        command:
+            - |
+              for _ in $$(seq 1 60); do
+                wget -q -O /dev/null http://push-relay:8080/readyz && exit 0
+                sleep 1
+              done
+              exit 1
+        networks:
+            - push
+        depends_on:
+            push-relay:
+                condition: service_started
+        restart: "no"
+
     server:
         networks:
             - operation
 
     operation:
-        image: ${TOLO_OP_IMAGE:-tolo-operation:5bd4c59}
+        image: ${TOLO_OP_IMAGE:-tolo-operation:3ab2140}
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#5bd4c59c9a1de678c1a6a7224ab7d30f195c93ab
+            context: https://github.com/pj-hoakari/tolo-operation.git#3ab21400ece2cbe1c770b1de7a2fad18b083857a
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://operation-db:5432/operation?sslmode=disable&user=operation&password=${TOLO_OP_DB_PASSWORD:-operation}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
             INTERNAL_JWT_ISSUER: service-gateway
             INTERNAL_JWT_AUDIENCE: tolo-operation
+            NATS_URL: nats://nats:4222
         networks:
             - operation
             - operation-db
+            - operation-nats
         depends_on:
             operation-migrate:
+                condition: service_completed_successfully
+            push-relay-ready:
                 condition: service_completed_successfully
             server:
                 condition: service_started
 
     operation-migrate:
-        image: ${TOLO_OP_MIGRATE_IMAGE:-tolo-operation-migrate:5bd4c59}
+        image: ${TOLO_OP_MIGRATE_IMAGE:-tolo-operation-migrate:3ab2140}
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#5bd4c59c9a1de678c1a6a7224ab7d30f195c93ab
+            context: https://github.com/pj-hoakari/tolo-operation.git#3ab21400ece2cbe1c770b1de7a2fad18b083857a
             target: migrate
         command:
             - -database
@@ -62,4 +87,6 @@ networks:
     operation:
         internal: true
     operation-db:
+        internal: true
+    operation-nats:
         internal: true

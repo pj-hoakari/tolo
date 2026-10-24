@@ -51,6 +51,41 @@ services:
             keygen:
                 condition: service_completed_successfully
 
+    nats:
+        image: nats:2-alpine@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde
+        command: ["-js", "-m", "8222"]
+        networks:
+            - push-relay
+        healthcheck:
+            test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8222/healthz?js-enabled-only=true"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    push-relay:
+        image: ${TOLO_PUSH_RELAY_IMAGE:-jetstream-http-push:ef072ef}
+        build:
+            context: https://github.com/pj-hoakari/jetstream-http-push.git#ef072ef951b5d77c5d02fbe79e1d5ce81ed0b2fa
+        environment:
+            NATS_URL: nats://nats:4222
+            SUBSCRIPTIONS_FILE: /etc/jetstream-http-push/subscriptions.json
+        volumes:
+            - ./config/push/subscriptions.json:/etc/jetstream-http-push/subscriptions.json:ro
+        networks:
+            - push-relay
+            - push
+        depends_on:
+            nats:
+                condition: service_healthy
+
+    push-receiver:
+        image: mendhak/http-https-echo:42@sha256:a265f55c86cb3baead76fdf379dc8e9e6440ed121874e101e60b833e05bce8d4
+        environment:
+            HTTP_PORT: "8080"
+            LOG_WITHOUT_NEWLINE: "true"
+        networks:
+            - push
+
 volumes:
     internal-jwt-keys:
     idp-introspection:
@@ -59,3 +94,7 @@ volumes:
 networks:
     idp:
         name: tolo-idp
+    push-relay:
+        internal: true
+    push:
+        internal: true
