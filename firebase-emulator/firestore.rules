@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /tenants/{tenantId}/events/{eventId}/edgeDevices/{edgeDeviceId}/sessions/{sessionId} {
+      function peer() {
+        return request.auth != null
+          && request.auth.token.tenant_id == tenantId
+          && request.auth.token.event_id == eventId
+          && request.auth.token.token_use == 'signaling'
+          && request.time < timestamp.value(request.auth.token.expires_at * 1000);
+      }
+
+      function role() {
+        return request.auth.token.peer_role;
+      }
+
+      allow read: if peer() && role() in ['edge', 'console'];
+      allow delete: if peer() && role() == 'console';
+
+      match /signals/{signalId} {
+        allow read: if peer() && role() in ['edge', 'console'];
+        allow create: if peer()
+          && role() in ['edge', 'console']
+          && request.resource.data.keys().hasOnly(['from', 'payload', 'createdAt'])
+          && request.resource.data.keys().hasAll(['from', 'payload', 'createdAt'])
+          && request.resource.data.from == role()
+          && request.resource.data.createdAt == request.time;
+        allow delete: if peer() && role() == 'console';
+      }
+    }
+
+    match /deliveryNotifications/{eventId} {
+      allow read: if request.auth != null
+        && request.auth.token.event_id == eventId
+        && request.auth.token.token_use == 'delivery_notification'
+        && request.time < timestamp.value(request.auth.token.expires_at * 1000);
+    }
+  }
+}
