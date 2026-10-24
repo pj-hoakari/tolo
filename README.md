@@ -48,12 +48,16 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.obs.yml` | Observation とその DB・マイグレーション |
 | `compose.op.yml` | Operation とその DB・マイグレーション |
 | `compose.flow.yml` | Flow Control と、profile `runn` の `runn` |
-| `compose.edge.yml` | Firebase Emulator（ホストの 8081・9099・4000）と edge-bridge（ホストの 8787） |
+| `compose.edge.yml` | Firebase Emulator（ホストの 8081・9099・4000）と edge-bridge（ホストの 8787）。エミュレータは `firebase-emulator/` からビルドする |
 | `compose.guest.yml` | Guest Service とその DB・マイグレーション |
 | `compose.rt.yml` | Realtime とその DB・マイグレーション。`compose.edge.yml` の Firebase Emulator を使う |
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
 | `compose.idp.yml` | 実物の IdP（tolo-idp）。`server` はホストの 18090 に移る |
 | `compose.o11y.yml` | Jaeger |
+
+`firebase-emulator/firestore.rules` は、Edge Bridge Service のシグナリング文書と Realtime の最終更新 ID 文書（`deliveryNotifications`）のルールを合わせた、本番の Firebase プロジェクトと同じ内容にする  
+tolo-edge-bridge と tolo-realtime は、それぞれ自分のサービスの分だけのルールを持つ。どちらかのルールを変えたら、このファイルも合わせて変える  
+エミュレータのイメージはこのディレクトリからビルドするので、ルールを変えたら `task up -- --build` で作り直す
 
 `web` には `GATEWAY_URL=http://server:8080` と `SIGNALING_URL=http://edge-bridge:8787` を渡し、モックを無効にしてある
 
@@ -88,7 +92,7 @@ Notification はまだこの環境に含めておらず、`SendPush` は当面�
 | `TOLO_RT_MIGRATE_IMAGE` | `realtime-migrate` | tolo-realtime の固定コミットからビルド |
 | `TOLO_FLOW_IMAGE` | `flow-control` | tolo-flow-control の固定コミットからビルド |
 | `TOLO_EDGE_BRIDGE_IMAGE` | `edge-bridge` | tolo-edge-bridge の固定コミットからビルド |
-| `TOLO_FIREBASE_EMULATOR_IMAGE` | `firebase-emulator` | tolo-edge-bridge の固定コミットからビルド |
+| `TOLO_FIREBASE_EMULATOR_IMAGE` | `firebase-emulator` | このリポジトリの `firebase-emulator/` からビルド |
 | `TOLO_WEB_IMAGE` | `web` | tolo-web の固定コミットからビルド |
 | `TOLO_IDP_IMAGE` | `idp`（`compose.idp.yml`） | ghcr の native ビルドの固定した版 |
 

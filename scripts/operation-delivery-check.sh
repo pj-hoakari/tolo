@@ -7,6 +7,8 @@ TENANT_ID="${TOLO_TENANT_ID:-0123456789abcdef}"
 EVENT_ID="${TOLO_EVENT_ID:-fedcba9876543210}"
 SENDER_SUB="${SENDER_SUB:-staff-sender}"
 SURGE_START="${SURGE_START:-0}"
+FIRESTORE_BASE_URL="${FIRESTORE_BASE_URL:-http://localhost:8081}"
+FIREBASE_AUTH_BASE_URL="${FIREBASE_AUTH_BASE_URL:-http://localhost:9099}"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 token_script="${script_dir}/fakeidp-token.sh"
@@ -108,5 +110,30 @@ staff_token="$(FAKEIDP_BASE_URL="${FAKEIDP_BASE_URL}" "${token_script}" -k event
 eventually "Realtime returns delivery ${delivery_id} to staff-online" \
     "any(.envelopes[]?; .deliveryId == \"${delivery_id}\")" \
     tolo.realtime.v1.RealtimeFetchService/FetchDeliveries "$(jq -nc --arg e "${proposal_event_id}" '{eventId: $e}')" "${staff_token}"
+
+printf '\n# 6. the staff app reads the delivery notification under the production-equivalent Firestore rules\n'
+call tolo.realtime.v1.RealtimeFetchService/IssueFirestoreToken "$(jq -nc --arg e "${proposal_event_id}" '{eventId: $e}')" "${staff_token}"
+expect 200
+custom_token="$(printf '%s' "${body}" | jq -r '.firebaseCustomToken')"
+id_token="$(curl -sS -X POST -H 'Content-Type: application/json' \
+    -d "$(jq -nc --arg t "${custom_token}" '{token: $t, returnSecureToken: true}')" \
+    "${FIREBASE_AUTH_BASE_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=e2e" | jq -r '.idToken')"
+[ -n "${id_token}" ] && [ "${id_token}" != null ] || { printf 'NG: signInWithCustomToken returned no idToken\n' >&2; exit 1; }
+read_notification() {
+    curl -sS -o /tmp/tolo-delivery-notification.json -w '%{http_code}' -H "Authorization: Bearer ${id_token}" \
+        "${FIRESTORE_BASE_URL}/v1/projects/demo-tolo/databases/(default)/documents/deliveryNotifications/$1"
+}
+for _ in $(seq 1 20); do
+    notification_status="$(read_notification "${proposal_event_id}")"
+    latest="$(jq -r '.fields.latestDeliveryId.stringValue // empty' /tmp/tolo-delivery-notification.json)"
+    [ "${notification_status}" = 200 ] && [ "${latest}" = "${delivery_id}" ] && break
+    sleep 1
+done
+[ "${notification_status}" = 200 ] && [ "${latest}" = "${delivery_id}" ] \
+    || { printf 'NG: deliveryNotifications/%s -> HTTP %s latestDeliveryId=%s\n' "${proposal_event_id}" "${notification_status}" "${latest}" >&2; exit 1; }
+printf 'ok: deliveryNotifications/%s is readable and its latestDeliveryId is %s\n' "${proposal_event_id}" "${delivery_id}"
+other_status="$(read_notification "${EVENT_ID}")"
+[ "${other_status}" = 403 ] || { printf 'NG: deliveryNotifications/%s of another event -> HTTP %s, want 403\n' "${EVENT_ID}" "${other_status}" >&2; exit 1; }
+printf 'ok: deliveryNotifications/%s of another event is denied\n' "${EVENT_ID}"
 
 printf '\nall steps behaved as expected (message_id=%s delivery_id=%s)\n' "${message_id}" "${delivery_id}"

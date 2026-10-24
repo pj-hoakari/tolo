@@ -44,6 +44,7 @@ PostgreSQL のパスワードは `TOLO_OP_DB_PASSWORD` で変えられる（既�
 3. Gateway の監査ログで、`caller_service=tolo-observation` の `RequestProposalDelivery` と `RecordFeedbackValues` が `http_status=200` であることを確かめる
 4. Operation のログで、`SendPush` のスケルトンの出力を確かめる
 5. 中継が届けた内容を、受け取ったサービスの RPC で確かめる。Guest Service の `ListGuestMessages` と `GetCrowd` は匿名で、Realtime の `FetchDeliveries` は `staff-online` の `event_access` トークン（scope `events.read`）で呼ぶ
+6. Realtime の `IssueFirestoreToken` で得たカスタムトークンで Auth エミュレータにサインインし、Firestore エミュレータの `deliveryNotifications` を読む。エミュレータには `firebase-emulator/firestore.rules`（本番相当のルール）が入っている
 
 `UpdateConnectionState` は、`userId` がトークンの `sub` と一致しないと拒否する。そのためスタッフごとにトークンを発行する  
 提案はホストから直接は出せないので、Observation に実際の観測サイクルを回させて出す  
@@ -62,8 +63,10 @@ PostgreSQL のパスワードは `TOLO_OP_DB_PASSWORD` で変えられる（既�
 | Guest Service の `ListGuestMessages`（固定のイベント） | 送ったメッセージを、送った本文で含む |
 | Guest Service の `GetCrowd`（runn が作ったイベント） | `takenAt` が空でない。Observation が観測サイクルごとに publish した `guest-status` が届いている |
 | Realtime の `FetchDeliveries`（runn が作ったイベント、`staff-online`） | `SendPush` と同じ `delivery_id` の配信を含む |
+| Firestore の `deliveryNotifications/<runn が作ったイベント>` | `200`。`latestDeliveryId` が `SendPush` と同じ `delivery_id` |
+| Firestore の `deliveryNotifications/<固定のイベント>` | `403`。トークンのイベントと違うので、ルールが読み取りを拒む |
 
-届くまでの遅れを見込み、5 の確認は 1 秒おきに 20 回まで呼び直す  
+届くまでの遅れを見込み、5 と 6 の確認は 1 秒おきに 20 回まで呼び直す。Realtime は配信ログに書いてから Firestore の文書を書くので、`FetchDeliveries` が返した時点では文書がまだないことがある  
 Guest Service の復旧 pull は起動時と 10 分おきなので、確認の時間内に届いたものは push で届いたことになる
 
 ログは、スクリプトの開始より後のものだけを読む  
