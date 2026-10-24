@@ -23,9 +23,9 @@ services:
         restart: "no"
 
     server:
-        image: ${TOLO_GATEWAY_IMAGE:-tolo-service-gateway:9eb734f}
+        image: ${TOLO_GATEWAY_IMAGE:-tolo-service-gateway:95df269}
         build:
-            context: https://github.com/pj-hoakari/tolo-service-gateway.git#9eb734f910402fb3c5f74b54789a4ce36393e1cc
+            context: https://github.com/pj-hoakari/tolo-service-gateway.git#95df2691aee200ef194f73bc5d790f429f87416c
             target: server
         environment:
             TOLO_GATEWAY_LISTENER_MODE: split
@@ -77,14 +77,6 @@ services:
         depends_on:
             nats:
                 condition: service_healthy
-
-    push-receiver:
-        image: mendhak/http-https-echo:42@sha256:a265f55c86cb3baead76fdf379dc8e9e6440ed121874e101e60b833e05bce8d4
-        environment:
-            HTTP_PORT: "8080"
-            LOG_WITHOUT_NEWLINE: "true"
-        networks:
-            - push
 
 volumes:
     internal-jwt-keys:

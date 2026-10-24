@@ -1,0 +1,84 @@
+services:
+    push-relay:
+        networks:
+            - push-realtime
+
+    server:
+        networks:
+            - realtime
+
+    firebase-emulator:
+        networks:
+            - realtime-firebase
+
+    realtime:
+        image: ${TOLO_RT_IMAGE:-tolo-realtime:1ea746e}
+        build:
+            context: https://github.com/pj-hoakari/tolo-realtime.git#1ea746e92f6a51b4dcbed3ec8f004dd6ba679b43
+        environment:
+            SERVER_ADDR: :8080
+            DATABASE_URL: postgres://realtime-db:5432/realtime?sslmode=disable&user=realtime&password=${TOLO_RT_DB_PASSWORD:-realtime}
+            FIRESTORE_PROJECT_ID: demo-tolo
+            FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
+            FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+            INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
+            INTERNAL_JWT_ISSUER: service-gateway
+            INTERNAL_JWT_AUDIENCE: tolo-realtime
+        networks:
+            - realtime
+            - realtime-db
+            - realtime-firebase
+            - push-realtime
+        depends_on:
+            realtime-migrate:
+                condition: service_completed_successfully
+            firebase-emulator:
+                condition: service_healthy
+            server:
+                condition: service_started
+
+    realtime-migrate:
+        image: ${TOLO_RT_MIGRATE_IMAGE:-tolo-realtime-migrate:1ea746e}
+        build:
+            context: https://github.com/pj-hoakari/tolo-realtime.git#1ea746e92f6a51b4dcbed3ec8f004dd6ba679b43
+            target: migrate
+        command:
+            - -database
+            - postgres://realtime-db:5432/realtime?sslmode=disable&user=realtime&password=${TOLO_RT_DB_PASSWORD:-realtime}
+            - up
+        networks:
+            - realtime-db
+        depends_on:
+            realtime-db:
+                condition: service_healthy
+        restart: "no"
+
+    realtime-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: realtime
+            POSTGRES_USER: realtime
+            POSTGRES_PASSWORD: ${TOLO_RT_DB_PASSWORD:-realtime}
+        networks:
+            - realtime-db
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+        volumes:
+            - realtime-data:/var/lib/postgresql
+
+volumes:
+    realtime-data:
+
+networks:
+    realtime:
+        internal: true
+    realtime-db:
+        internal: true
+    realtime-firebase:
+        internal: true
+    push-realtime:
+        internal: true
