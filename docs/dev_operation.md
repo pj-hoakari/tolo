@@ -4,10 +4,10 @@
 Observation は Flow Control の `Optimize` の後に、Gateway の内部用 listener（`http://server:8090`）を通して Operation の `RecordFeedbackValues` を毎サイクル呼ぶ  
 結果が `VERDICT_OPTIMIZED` で提案を含むときは、`RequestProposalDelivery` も呼ぶ  
 Operation は、そのイベントで接続状態を登録したスタッフのうち、接続中のスタッフには Realtime へ、未接続のスタッフには Notification の `SendPush` で提案を届ける  
-スタッフのメッセージのうち来場者向けのものは、Pub/Sub の `guest-messages` へ publish する
+Realtime への配信は `realtime-delivery` へ、スタッフのメッセージのうち来場者向けのものは `guest-messages` へ、NATS JetStream を通して publish する
 
 Realtime・Notification・Guest Service はこの環境に含めていない  
-そのため `guest-messages`・`realtime-delivery` への publish と `SendPush` は、当面ログに出すだけのスケルトンになる
+そのため publish したメッセージは、中継の `push-relay` が受け口の代わりの `push-receiver` へ届ける。`SendPush` は当面ログに出すだけのスケルトンになる
 
 ## 構成
 
@@ -42,7 +42,8 @@ PostgreSQL のパスワードは `TOLO_OP_DB_PASSWORD` で変えられる（既�
 1. 固定のテナントとイベントの `event_access` トークン（scope `events.read events.operate`）で、来場者向けのメッセージを `SendStaffMessage` で送り、`ListStaffMessages` で読み返す
 2. runn の `integration-proposal.yml` を `surgeStart` を `0` にして実行する。runbook は事前データを作った後、`staff-online`（接続中）と `staff-offline`（未接続）の接続状態を、それぞれの `sub` のトークンで `UpdateConnectionState` に登録する。続けて、迂回路の提案が保存されるまで計測値を送る
 3. Gateway の監査ログで、`caller_service=tolo-observation` の `RequestProposalDelivery` と `RecordFeedbackValues` が `http_status=200` であることを確かめる
-4. Operation のログで、スケルトンの出力を確かめる
+4. Operation のログで、`SendPush` のスケルトンの出力を確かめる
+5. `push-receiver` のログで、中継が `guest-messages`・`realtime-delivery`・`guest-status` を届けたことを確かめる
 
 `UpdateConnectionState` は、`userId` がトークンの `sub` と一致しないと拒否する。そのためスタッフごとにトークンを発行する  
 提案はホストから直接は出せないので、Observation に実際の観測サイクルを回させて出す  
@@ -57,9 +58,14 @@ PostgreSQL のパスワードは `TOLO_OP_DB_PASSWORD` で変えられる（既�
 | `SendStaffMessage`（`AUDIENCE_GUEST`） | `200`。`messageId` |
 | `ListStaffMessages`（`AUDIENCE_GUEST`） | `200`。送ったメッセージを含む |
 | 監査ログの `RequestProposalDelivery`・`RecordFeedbackValues` | `caller_service=tolo-observation`・`token_use=service` の記録が `http_status=200` |
-| ログの `pubsub publish (log-only skeleton)` | `topic=guest-messages` で、`payload.upserts` に送ったメッセージを含む |
 | ログの `notification SendPush (log-only skeleton)` | `recipient_user_ids` が `["staff-offline"]` |
-| ログの `pubsub publish (log-only skeleton)` | `topic=realtime-delivery` で、`SendPush` と同じ `delivery_id`、`recipient_user_ids` が `["staff-online"]` |
+| `push-receiver` の `/push/guest-messages` | 本文が送ったメッセージの ID を含む |
+| `push-receiver` の `/push/realtime-delivery` | 本文が `SendPush` と同じ `delivery_id` と `staff-online` を含む |
+| `push-receiver` の `/push/guest-status` | Observation が観測サイクルごとに publish したもの |
+
+`push-receiver` の 3 つは、どれも `Content-Type` が `application/octet-stream` で、`x-goog-pubsub-ordering-key`・`x-goog-pubsub-message-id`・`x-goog-pubsub-publish-time` が空でない  
+`/push/guest-messages` の `x-goog-pubsub-ordering-key` は固定のイベントの ID になる。残りの 2 つは、runn が作ったイベントの ID で、`SendPush` のログの `event_id` と同じになる  
+本文は proto のバイト列なので、ID は本文に文字列として含まれるかで確かめる
 
 ログは、スクリプトの開始より後のものだけを読む  
 この確認は GitHub Actions の `E2E` でも、Observation の確認の後に走る。提案を待つ分、`E2E` の時間は 6 分ほど延びる
