@@ -1,12 +1,14 @@
 services:
     flow-control:
-        image: ${TOLO_FLOW_IMAGE:-tolo-flow-control:17cd12a}
+        image: ${TOLO_FLOW_IMAGE:-tolo-flow-control:dfd748a}
         build:
-            context: https://github.com/pj-hoakari/tolo-flow-control.git#17cd12a79aeefbf3912eb0969d7251cb765089be
+            context: https://github.com/pj-hoakari/tolo-flow-control.git#dfd748a88473048ddd0d13bf02441e474d2a4434
         environment:
             PORT: "8080"
             TOLO_RPC_MAX_REQUEST_BYTES: "8388608"
             TOLO_RPC_MAX_EXECUTION_SEC: "720"
+            TOLO_GRAPH_MAX_NODES: "60"
+            TOLO_GRAPH_MAX_EDGES: "150"
         read_only: true
         tmpfs:
             - /tmp
