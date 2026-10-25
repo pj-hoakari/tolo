@@ -4,9 +4,9 @@ services:
             - graph-authoring
 
     graph-authoring:
-        image: ${TOLO_GA_IMAGE:-tolo-graph-authoring:d9cfbfe}
+        image: ${TOLO_GA_IMAGE:-tolo-graph-authoring:d82aada}
         build:
-            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#d9cfbfed5d4bc95f537aa1552399d3946948d647
+            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#d82aada3c8d8ef14a7bf4dd5eb708ba0a35fa9f2
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://graph-authoring-db:5432/graph_authoring?sslmode=disable&user=graph_authoring&password=${TOLO_GA_DB_PASSWORD:-graph_authoring}
@@ -24,9 +24,9 @@ services:
                 condition: service_started
 
     graph-authoring-migrate:
-        image: ${TOLO_GA_MIGRATE_IMAGE:-tolo-graph-authoring-migrate:d9cfbfe}
+        image: ${TOLO_GA_MIGRATE_IMAGE:-tolo-graph-authoring-migrate:d82aada}
         build:
-            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#d9cfbfed5d4bc95f537aa1552399d3946948d647
+            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#d82aada3c8d8ef14a7bf4dd5eb708ba0a35fa9f2
             target: migrate
         command:
             - -database
