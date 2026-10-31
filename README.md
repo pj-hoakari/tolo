@@ -59,7 +59,9 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 tolo-edge-bridge と tolo-realtime は、それぞれ自分のサービスの分だけのルールを持つ。どちらかのルールを変えたら、このファイルも合わせて変える  
 エミュレータのイメージはこのディレクトリからビルドするので、ルールを変えたら `task up -- --build` で作り直す
 
-`web` には `GATEWAY_URL=http://server:8080` と `SIGNALING_URL=http://edge-bridge:8787` を渡し、モックを無効にしてある
+`web` には `GATEWAY_URL=http://server:8080` と `SIGNALING_URL=http://edge-bridge:8787` を渡し、API のモックを無効にしてある  
+ログインは固定のトークンを使う tolo-web のモック（`AUTH_MOCKING=enabled`）で済ませる  
+`web` は招待の受諾とオンボーディングで使う `registration` のトークンを fake IdP から取るため、ネットワーク `tolo-idp` にも参加する
 
 Operation と Observation は、情報更新の push を NATS JetStream へ publish する  
 ストリームは Operation と Observation が起動時に作り、保存期限は両方に渡す `NATS_STREAM_MAX_AGE`（`24h`）で決まる  
@@ -119,7 +121,19 @@ Web から使うテナントとイベントは固定してある
 seed は何度実行しても同じ結果になる  
 Web の URL のホストにはサブドメインを使い、固定のテナントは `<TOLO_TENANT_SUBDOMAIN>.localhost`（既定は `test.localhost`）で開く  
 サブドメインは Tenant Management が持ち、匿名の `ResolveTenantSubdomain` でテナントの ID に引ける  
-SQL は固定した tolo-tenant-management のコミット（`00b472c`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+SQL は固定した tolo-tenant-management のコミット（`612260d`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+
+## 招待の受諾
+
+tolo-web のモックは、テナントのホストへの要求を `AUTH_MOCK_USER_ID` のユーザー（既定は `user-owner`）からの要求として扱う  
+オーナーはすでにテナントに所属しているので、招待の受諾は `web` を別のユーザーで作り直して確かめる
+
+1. `http://test.localhost:3000/management/members` で招待 URL を作る
+2. `AUTH_MOCK_USER_ID=user-invitee task up` で、`web` を `user-invitee` として作り直す
+3. 招待 URL を開き、「参加する」を押す。参加すると `/management` へ移る
+4. `task up` で `web` を `user-owner` に戻し、メンバーの一覧に招待した表示名のスタッフが出ることを確かめる
+
+モックのトークン（`task tokens`）は固定のテナントとイベントに結び付いているので、受諾したユーザーとしてほかのテナントは操作できない
 
 ## fake IdP
 
@@ -147,7 +161,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 | `task fakeidp:up` | fake IdP を起動する。`task up` の後に実行する |
 | `task fakeidp:down` | fake IdP を止める。発行したトークンは使えなくなる |
 | `task tokens` | Web 用のトークンを `.env` の行の形で出力する |
-| `task e2e` | オンボーディング・固定テナントのサブドメイン・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
+| `task e2e` | オンボーディング・招待の受諾・固定テナントのサブドメイン・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
 GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.edge.yml` と `compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する

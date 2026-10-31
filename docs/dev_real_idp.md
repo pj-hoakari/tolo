@@ -123,8 +123,8 @@ IdP は本体を返さず `204` ではなく `200` と空の本文で応答す�
 失効照会の資格情報は `IDP_ISSUER` を設定したら必須で、揃っていなければ `server` は設定エラーで起動しない  
 `IDP_INTROSPECTION=disabled` を明示すると資格情報なしで起動できるが、対象の 6 RPC は `unauthenticated`（`introspection_unavailable`）で拒否され続ける
 
-IdP が発行できる scope は `openid`・`tenant.read`・`tenant.write`・`events.read`・`events.write` だけで、登録表が要求する `events.manage`・`tenant.claim`・`greeting.read` は出せない  
-`tenant.claim`・`greeting.read` を必要とする RPC は実物の IdP では試せない
+IdP が発行できる scope は `openid`・`tenant.read`・`tenant.write`・`events.read`・`events.write` だけで、登録表が要求する `events.manage`・`tenant.join`・`greeting.read` は出せない  
+`tenant.join`・`greeting.read` を必要とする RPC は実物の IdP では試せない
 
 ### `events.write` の読み替え
 

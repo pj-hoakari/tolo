@@ -23,9 +23,9 @@ services:
         restart: "no"
 
     server:
-        image: ${TOLO_GATEWAY_IMAGE:-tolo-service-gateway:91e8cd8}
+        image: ${TOLO_GATEWAY_IMAGE:-tolo-service-gateway:d892c75}
         build:
-            context: https://github.com/pj-hoakari/tolo-service-gateway.git#91e8cd868a6d25539caaea36a7b03d3e88644bc0
+            context: https://github.com/pj-hoakari/tolo-service-gateway.git#d892c758cd560f6df715aea6947ff4a07c4f5ced
             target: server
         environment:
             TOLO_GATEWAY_LISTENER_MODE: split

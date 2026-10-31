@@ -45,7 +45,7 @@ steps:
               token_use: registration
               sub: "{{ vars.ownerSub }}"
               client_id: "{{ vars.clientId }}"
-              scope: tenant.claim
+              scope: tenant.join
     test: current.res.status == 200
   claimTenant:
     gw:
@@ -58,6 +58,7 @@ steps:
               tenantId: "{{ steps.startTenant.res.body.tenant.tenantId }}"
               ownershipClaimToken: "{{ steps.startTenant.res.body.ownershipClaimToken }}"
               subdomain: '"int-{{ now().UnixNano() }}"'
+              displayName: owner
     test: current.res.status == 200
   ownerToken:
     idp:
