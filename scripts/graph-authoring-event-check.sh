@@ -70,9 +70,9 @@ expect 200
 tenant_id="$(printf '%s' "${body}" | jq -r '.tenant.tenantId')"
 claim_token="$(printf '%s' "${body}" | jq -r '.ownershipClaimToken')"
 
-registration_token="$(token -k registration -b "${OWNER_SUB}" -s 'tenant.claim')"
+registration_token="$(token -k registration -b "${OWNER_SUB}" -s 'tenant.join')"
 call tolo.tenant.v1.TenantService/ClaimTenantOwnership \
-    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" --arg s "${TENANT_SUBDOMAIN}" '{tenantId: $t, ownershipClaimToken: $c, subdomain: $s}')" \
+    "$(jq -nc --arg t "${tenant_id}" --arg c "${claim_token}" --arg s "${TENANT_SUBDOMAIN}" '{tenantId: $t, ownershipClaimToken: $c, subdomain: $s, displayName: "owner"}')" \
     "${registration_token}"
 expect 200
 

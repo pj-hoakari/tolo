@@ -10,8 +10,8 @@ FROM tenants t
 WHERE t.public_id = :'tenant_id'
 ON CONFLICT (public_id) DO NOTHING;
 
-INSERT INTO tenant_memberships (tenant_id, user_id, tenant_role)
-SELECT t.id, :'owner_sub', 'owner'
+INSERT INTO tenant_memberships (tenant_id, user_id, tenant_role, display_name)
+SELECT t.id, :'owner_sub', 'owner', LEFT(:'owner_sub', 64)
 FROM tenants t
 WHERE t.public_id = :'tenant_id'
 ON CONFLICT (tenant_id, user_id) DO NOTHING;

@@ -32,7 +32,7 @@ task fakeidp:up
 
 ### イメージ
 
-tolo-tenant-management の develop の固定コミット（`a2ea479`）を git URL のビルドコンテキストにして、サーバーとマイグレーション用（`migrate` ターゲット）のイメージを作る  
+tolo-tenant-management の develop の固定コミット（`612260d`）を git URL のビルドコンテキストにして、サーバーとマイグレーション用（`migrate` ターゲット）のイメージを作る  
 `config/seed/tenant-management.sql` はこのコミットのスキーマに合わせて書いてあるので、コミットを上げるときは seed も直す
 
 未公開の版で試すときは、tolo-tenant-management のリポジトリでイメージを作り、`TOLO_TM_IMAGE` と `TOLO_TM_MIGRATE_IMAGE` で差し替える
@@ -78,7 +78,7 @@ curl -sS -H 'Content-Type: application/json' -d "$(jq -nc --arg t "$TOKEN" '{tok
 
 ## オンボーディングの流れ
 
-`scripts/tenant-management-onboarding.sh` が、仮テナントの作成から所有権の取得とサブドメインの解決・イベント作成・メンバー追加・権限の境界・失効までを通しで実行し、各段階の HTTP ステータスと本文を出す  
+`scripts/tenant-management-onboarding.sh` が、仮テナントの作成から所有権の取得とサブドメインの解決・イベント作成・作成者のイベントロール・招待の作成と受諾・権限の境界・失効までを通しで実行し、各段階の HTTP ステータスと本文を出す  
 想定と違うステータスが返った段階で失敗する
 
 ```bash
@@ -96,9 +96,9 @@ TENANT=$(curl -sS -X POST -H 'Content-Type: application/json' -d '{"name":"acme"
 TID=$(printf '%s' "$TENANT" | jq -r .tenant.tenantId)
 CLAIM=$(printf '%s' "$TENANT" | jq -r .ownershipClaimToken)
 
-REG=$(./scripts/fakeidp-token.sh -k registration -b user-owner -s "tenant.claim")
+REG=$(./scripts/fakeidp-token.sh -k registration -b user-owner -s "tenant.join")
 curl -sS -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $REG" \
-    -d "{\"tenantId\":\"$TID\",\"ownershipClaimToken\":\"$CLAIM\",\"subdomain\":\"acme\"}" \
+    -d "{\"tenantId\":\"$TID\",\"ownershipClaimToken\":\"$CLAIM\",\"subdomain\":\"acme\",\"displayName\":\"owner\"}" \
     http://localhost:8080/tolo.tenant.v1.TenantService/ClaimTenantOwnership
 
 TOKEN=$(./scripts/fakeidp-token.sh -k tenant_access -b user-owner -t "$TID")
@@ -111,7 +111,8 @@ Connect の JSON は lowerCamelCase になる（`tenantId`・`ownershipClaimToke
 enum は `ROLE_STAFF` のような完全な名前の文字列で渡す  
 `ClaimTenantOwnership` は `token_use=registration` を要求し、`registration` のトークンは `tenant_id` を持たない  
 対象のテナントはリクエストの `tenantId` と一回限りの `ownershipClaimToken` で指定する  
-`subdomain` は必須で、すでに使われているサブドメインを指定すると `already_exists`（HTTP 409）になる
+`subdomain` は必須で、すでに使われているサブドメインを指定すると `already_exists`（HTTP 409）になる  
+`displayName` はメンバーの一覧に出るオーナーの表示名になる
 
 ## 通る RPC と通らない RPC
 
@@ -120,19 +121,23 @@ enum は `ROLE_STAFF` のような完全な名前の文字列で渡す
 | RPC | 必要な scope | 結果 |
 | --- | --- | --- |
 | `TenantService/StartTenantRegistration` | （匿名） | `200`。`tenantId` と `ownershipClaimToken` |
-| `TenantService/ClaimTenantOwnership` | `tenant.claim`（`registration`） | `200`。`ownershipState` が `OWNED` になり、`subdomain` が入る |
+| `TenantService/ClaimTenantOwnership` | `tenant.join`（`registration`） | `200`。`ownershipState` が `OWNED` になり、`subdomain` が入る |
 | `TenantService/ResolveTenantSubdomain` | （匿名） | `200`。サブドメインに対応する `tenantId` |
 | `TenantService/ChangeTenantContract` | `tenant.write` | `200` |
 | `TenantService/CreateEvent` | `events.manage` | `200` |
 | `TenantService/TransitionEventStatus` | `events.manage` | `200` |
 | `TenantService/ListEvents` | `events.read` | `200` |
 | `TenantService/ArchiveTenant` | `tenant.write` | `200` |
-| `RelationAdminService/AddTenantMember` | `tenant.write` | `200` |
+| `RelationAdminService/CreateTenantInvitation` | `tenant.write` | `200`。`invitation` と一回限りの `invitationToken` |
+| `RelationAdminService/ListTenantInvitations` | `tenant.write` | `200`。未使用の招待 |
+| `RelationAdminService/RevokeTenantInvitation` | `tenant.write` | `200` |
+| `RelationAdminService/AcceptTenantInvitation` | `tenant.join`（`registration`） | `200`。招待した表示名とロールで所属ができ、招待は使用済みになる |
 | `RelationAdminService/ChangeTenantRole` | `tenant.write` | `200` |
 | `RelationAdminService/GrantEventRole` | `tenant.write` | `200` |
 | `RelationAdminService/RevokeRole` | `tenant.write` | `200` |
 | `RelationAdminService/ListMemberships` | `tenant.read` | `200` |
 | `TenantService/GetEvent` | — | `403 permission_denied`（監査 `internal_only`） |
+| `RelationAdminService/AddTenantMember` | — | `403 permission_denied`（監査 `internal_only`）。メンバーは招待で加える |
 
 拒否の出どころは 2 つあり、監査ログの `failure_reason` で見分けられる
 
@@ -141,7 +146,7 @@ enum は `ROLE_STAFF` のような完全な名前の文字列で渡す
 | scope 不足（`tenant.read` だけで `CreateEvent`） | `403 permission denied` | `missing_scope` | Gateway |
 | 内部オンリーの RPC を外部トークンで | `403 permission denied` | `internal_only` | Gateway |
 | 失効照会の対象 RPC を失効済みトークンで | `401 unauthenticated` | `token_revoked` | Gateway |
-| テナントの非メンバーが `AddTenantMember` | `403 current permission denied` | `upstream_refused` | Tenant Management |
+| テナントの非メンバーが `CreateTenantInvitation` | `403 current permission denied` | `upstream_refused` | Tenant Management |
 | トークンの `tenant_id` とリクエストの `tenantId` が違う | `403 tenant ID does not match context` | `upstream_refused` | Tenant Management |
 | 存在しない `tenant_id` で `ListEvents` | `404 tenant not found` | `upstream_refused` | Tenant Management |
 | archive 済みテナントへの書き込み | `400 tenant is archived` | `upstream_refused` | Tenant Management |
@@ -178,5 +183,5 @@ Gateway は登録表に無いパスを転送しないので、`http://localhost:
 
 実物の IdP との組み合わせ（`-f compose.yml -f compose.idp.yml -f compose.tm.yml`）は構成としては成立し、サービス名もポートも衝突しない  
 ただし IdP は所属を `idp-relation-stub` の静的なデータから引くため、Tenant Management が採番した `tenant_id` を持つトークンは発行できない（IdP と Tenant Management の所属参照 API が噛み合っていない既知の問題）  
-実物の IdP は `tenant.claim` も発行できないため、所有権の取得も試せない  
+実物の IdP は `tenant.join` も発行できないため、所有権の取得も招待の受諾も試せない  
 この組み合わせで確かめられるのは構成が成立することまでで、業務フローは通らない

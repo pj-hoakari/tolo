@@ -8,9 +8,9 @@ services:
             - web
 
     web:
-        image: ${TOLO_WEB_IMAGE:-tolo-web:165a696}
+        image: ${TOLO_WEB_IMAGE:-tolo-web:616e3bf}
         build:
-            context: https://github.com/pj-hoakari/tolo-web.git#165a696d477e69ac053ecd6de5dfbbdc2d377074
+            context: https://github.com/pj-hoakari/tolo-web.git#616e3bf204932c3a3791170dded169b03d7c6ef4
             target: dev
             secrets:
                 - npm_token
@@ -27,10 +27,14 @@ services:
             GRAPH_ACCESS_TOKEN: ${GRAPH_ACCESS_TOKEN:-}
             OBSERVATION_ACCESS_TOKEN: ${OBSERVATION_ACCESS_TOKEN:-}
             TENANT_ACCESS_TOKEN: ${TENANT_ACCESS_TOKEN:-}
+            AUTH_MOCKING: enabled
+            AUTH_MOCK_USER_ID: ${AUTH_MOCK_USER_ID:-}
+            FAKEIDP_URL: http://fakeidp:8080
         ports:
             - "3000:3000"
         networks:
             - web
+            - idp
         depends_on:
             server:
                 condition: service_started
