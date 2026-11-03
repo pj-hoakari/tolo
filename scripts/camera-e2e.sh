@@ -20,6 +20,12 @@ EVENT_ID="${TOLO_EVENT_ID:-fedcba9876543210}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-console-ui}"
 IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-secret}"
 IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:3000/api/auth/callback/console-ui}"
+IDP_USERNAME="${IDP_USERNAME:-user-123}"
+IDP_PASSWORD="${IDP_PASSWORD:-password}"
+CONNECTION_CLIENT_ID="${CONNECTION_CLIENT_ID:-observation-connection}"
+CONNECTION_REDIRECT_URI="${CONNECTION_REDIRECT_URI:-http://localhost:3000/api/auth/connection/callback}"
+WEB_DB_USER="${WEB_DB_USER:-tolo_web}"
+WEB_DB_NAME="${WEB_DB_NAME:-tolo_web}"
 
 DOCUMENTS="${FIRESTORE_URL}/v1/projects/demo-tolo/databases/(default)/documents"
 
@@ -62,6 +68,18 @@ call() {
 
     status="${response##*$'\n'}"
     body="${response%$'\n'*}"
+    printf '  HTTP %s\n' "${status}"
+}
+
+call_redirect() {
+    local method="$1" url="$2"
+    shift 2
+    local response
+    response="$(curl -sS -X "${method}" -D - -o /dev/null -w $'\n%{http_code}' "$@" "${url}")" \
+        || die "request failed: ${method} ${url}"
+    status="${response##*$'\n'}"
+    body=""
+    location="$(printf '%s' "${response%$'\n'*}" | tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1)"
     printf '  HTTP %s\n' "${status}"
 }
 
@@ -120,6 +138,53 @@ wait_for_http() {
     die "${label} did not become ready: ${url}"
 }
 
+idp_login() {
+    local cookies="$1"
+    local response
+    response="$(curl -sS -o /dev/null -w '%{http_code}' -c "${cookies}" \
+        -H 'Content-Type: application/json' \
+        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg t "${TENANT_ID}" \
+            '{username: $u, password: $p, tenantId: $t}')" \
+        "${IDP_URL}/api/login")"
+    [ "${response}" = "200" ] || die "IdP login for the connection flow failed with HTTP ${response}"
+}
+
+authorize_connection() {
+    local cookies="$1" page_id="$2"
+    local return_path="/event/${EVENT_ID}/observation"
+    local return_encoded
+    return_encoded="$(jq -rn --arg v "${return_path}" '$v|@uri')"
+
+    call_redirect GET "${WEB_URL}/api/auth/connection/start?eventId=${EVENT_ID}&pageEdgeDeviceId=${page_id}&return=${return_encoded}" \
+        -H "Host: ${WEB_HOST}" -b "${cookies}" -c "${cookies}"
+    expect_status 302 'BFF connection start'
+    [ -n "${location}" ] || die 'BFF connection start returned no Location'
+    printf '  BFF connection start redirected to %s\n' "${location}"
+
+    local authorize_path
+    authorize_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
+    call_redirect GET "${IDP_URL}${authorize_path}" -b "${cookies}" -c "${cookies}"
+    expect_status 302 'IdP connection authorize'
+    [ -n "${location}" ] || die 'IdP connection authorize returned no Location'
+    printf '  IdP authorize redirected to %s\n' "${location}"
+
+    local callback_path code state
+    callback_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
+    code="$(printf '%s' "${callback_path}" | sed -n 's/.*[?&]code=\([^&]*\).*/\1/p')"
+    state="$(printf '%s' "${callback_path}" | sed -n 's/.*[?&]state=\([^&]*\).*/\1/p')"
+    [ -n "${code}" ] && [ -n "${state}" ] || die "IdP authorize returned no code/state: ${location}"
+
+    call_redirect GET "${WEB_URL}${callback_path}" -H "Host: ${WEB_HOST}" -b "${cookies}" -c "${cookies}"
+    expect_status 302 'BFF connection callback'
+    printf '%s' "${location}" | grep -q 'cameraConnection=authorized' \
+        || die "the BFF connection callback did not report an authorized delegation: ${location}"
+    printf '  connection authorization stored for page %s\n' "${page_id}"
+}
+
+db_count() {
+    compose exec -T web-db psql -U "${WEB_DB_USER}" -d "${WEB_DB_NAME}" -tAc "$1" | tr -d '[:space:]'
+}
+
 wait_for_web() {
     local attempt code
     for attempt in $(seq 1 90); do
@@ -142,8 +207,10 @@ idp_token() {
         "${script_dir}/idp-token.sh" "$@"
 }
 
+connection_cookies="$(mktemp)"
 cleanup() {
     local code=$?
+    rm -f "${connection_cookies}"
     if [ "${KEEP_STACK:-0}" = "1" ]; then
         printf '\nkeeping the compose stack (KEEP_STACK=1): project=%s\n' "${PROJECT}"
         exit "${code}"
@@ -165,7 +232,7 @@ compose build server idp idp-relation-stub observation observation-migrate fireb
 compose up -d --wait \
     keygen server nats idp idp-db idp-redis idp-relation-stub idp-seed-secret \
     idp-camera-user-seed observation-db observation-migrate observation \
-    firebase-emulator edge-bridge
+    firebase-emulator edge-bridge web-db
 
 wait_for_http "${IDP_URL}/oauth2/jwks" 'idp'
 wait_for_http "${GATEWAY_URL}/readyz" 'service gateway'
@@ -336,12 +403,14 @@ assert_claim "${camera_custom_token}" token_use signaling
 assert_missing_claim "${camera_custom_token}" session_id
 printf '  camera custom token: edge_device_id=%s session_id=absent\n' "${camera_id}"
 
-step '5. tolo-web BFF signaling.requestCameraConnection'
+step '5. authorize the observation connection client and connect through the BFF'
 TENANT_ACCESS_TOKEN="${staff_token}" GRAPH_ACCESS_TOKEN="${event_token}" \
     compose build web
 TENANT_ACCESS_TOKEN="${staff_token}" GRAPH_ACCESS_TOKEN="${event_token}" \
     compose up -d --wait web
 wait_for_web
+idp_login "${connection_cookies}"
+authorize_connection "${connection_cookies}" "${page_id}"
 
 call POST "${WEB_URL}/rpc/signaling/requestCameraConnection" \
     -H 'Content-Type: application/json' \
@@ -362,6 +431,11 @@ assert_claim "${connection_custom_token}" session_id "${connection_session_id}"
 assert_claim "${connection_custom_token}" peer_role console
 assert_claim "${connection_custom_token}" token_use signaling
 printf '  connection session_id=%s, custom token bound to camera=%s\n' "${connection_session_id}" "${camera_id}"
+
+connection_exchange_log="$(compose logs idp 2>/dev/null | grep -F 'Token Exchange completed' | tail -1 || true)"
+printf '%s' "${connection_exchange_log}" | grep -q 'observation-connection' \
+    || die "the IdP did not record a token exchange for ${CONNECTION_CLIENT_ID}: ${connection_exchange_log}"
+printf '  IdP log shows the connection client (%s) token exchange\n' "${CONNECTION_CLIENT_ID}"
 
 call POST "${WEB_URL}/rpc/signaling/requestCameraConnection" \
     -H 'Content-Type: application/json' \
@@ -483,13 +557,21 @@ call POST "${DOCUMENTS}:commit" \
 expect_status 403 'connection token writes another session'
 printf '  mismatched edge and session writes were rejected\n'
 
-step '7. revoke the device authorization and verify the camera grant'
-call POST "${IDP_URL}/api/device-authorization/revoke" \
+step '7. revoke the device authorization and the connection delegation'
+call POST "${WEB_URL}/rpc/camera/revokeDeviceAuthorization" \
     -H 'Content-Type: application/json' \
-    -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
-    -d "$(jq -nc --arg e "${EVENT_ID}" --arg d "${camera_id}" '{event_id: $e, edge_device_id: $d}')"
-expect_status 204 'device authorization revoke'
-printf '  revoked the device authorization for %s\n' "${camera_id}"
+    -H 'x-csrf-token: orpc' \
+    -H "Host: ${WEB_HOST}" \
+    -d "$(jq -nc --arg e "${EVENT_ID}" --arg d "${camera_id}" '{
+        json: { eventId: $e, edgeDeviceId: $d }
+    }')"
+expect_status 200 'BFF camera.revokeDeviceAuthorization'
+printf '  revoked the device authorization for %s through the BFF\n' "${camera_id}"
+
+delegation_count="$(db_count "SELECT count(*) FROM \"connectionAuthorization\" WHERE \"eventId\" = '${EVENT_ID}' AND \"pageEdgeDeviceId\" = '${page_id}';")"
+[ "${delegation_count}" = "0" ] \
+    || die "the connection delegation was not deleted (rows=${delegation_count})"
+printf '  connection delegation rows for page %s were deleted\n' "${page_id}"
 
 call POST "${IDP_URL}/oauth2/token" \
     -H 'Content-Type: application/x-www-form-urlencoded' \
@@ -500,6 +582,36 @@ expect_status 400 'camera refresh after revoke'
 printf '%s' "${body}" | jq -e '.error == "invalid_grant"' >/dev/null \
     || die 'the revoked camera refresh did not return invalid_grant'
 printf '  camera refresh returned invalid_grant\n'
+
+call POST "${WEB_URL}/rpc/signaling/requestCameraConnection" \
+    -H 'Content-Type: application/json' \
+    -H 'x-csrf-token: orpc' \
+    -H "Host: ${WEB_HOST}" \
+    -d "$(jq -nc --arg e "${EVENT_ID}" --arg p "${page_id}" --arg c "${camera_id}" '{
+        json: { eventId: $e, pageEdgeDeviceId: $p, cameraEdgeId: $c }
+    }')"
+expect_not_status 200 'BFF requestCameraConnection after revoke'
+printf '%s' "${body}" | grep -q 'CONNECTION_AUTHORIZATION_REQUIRED' \
+    || die "the BFF did not require reauthorization after revoke: ${body}"
+printf '  camera connection failed until reauthorization\n'
+
+authorize_connection "${connection_cookies}" "${page_id}"
+call POST "${WEB_URL}/rpc/signaling/requestCameraConnection" \
+    -H 'Content-Type: application/json' \
+    -H 'x-csrf-token: orpc' \
+    -H "Host: ${WEB_HOST}" \
+    -d "$(jq -nc --arg e "${EVENT_ID}" --arg p "${page_id}" --arg c "${camera_id}" '{
+        json: { eventId: $e, pageEdgeDeviceId: $p, cameraEdgeId: $c }
+    }')"
+expect_status 200 'BFF requestCameraConnection after reauthorization'
+reauthorized_session_id="$(printf '%s' "${body}" | jq -r '.json.sessionId // empty')"
+reauthorized_custom_token="$(printf '%s' "${body}" | jq -r '.json.firestoreToken // empty')"
+[ -n "${reauthorized_session_id}" ] || die 'the BFF returned no sessionId after reauthorization'
+[ -n "${reauthorized_custom_token}" ] || die 'the BFF returned no firestoreToken after reauthorization'
+assert_claim "${reauthorized_custom_token}" edge_device_id "${camera_id}"
+assert_claim "${reauthorized_custom_token}" session_id "${reauthorized_session_id}"
+printf '  camera connection succeeded after reauthorization (session=%s)\n' "${reauthorized_session_id}"
+connection_session_id="${reauthorized_session_id}"
 
 call POST "${IDP_URL}/oauth2/device_authorization" \
     -H 'Content-Type: application/x-www-form-urlencoded' \

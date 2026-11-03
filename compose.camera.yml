@@ -112,6 +112,33 @@ services:
         ports: !override
             - "18787:8787"
 
+    web-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: tolo_web
+            POSTGRES_USER: tolo_web
+            POSTGRES_PASSWORD: ${TOLO_WEB_DB_PASSWORD:-tolo_web}
+        networks:
+            - web
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+
+    web-db-migrate:
+        image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
+        command: ["node", "scripts/migrate-auth-db.mjs"]
+        environment:
+            AUTH_DATABASE_URL: postgres://tolo_web:${TOLO_WEB_DB_PASSWORD:-tolo_web}@web-db:5432/tolo_web
+        networks:
+            - web
+        depends_on:
+            web-db:
+                condition: service_healthy
+        restart: "no"
+
     web:
         image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
         build:
@@ -127,9 +154,16 @@ services:
             TENANT_ACCESS_TOKEN: ${TENANT_ACCESS_TOKEN:-}
             GRAPH_ACCESS_TOKEN: ${GRAPH_ACCESS_TOKEN:-}
             OBSERVATION_ACCESS_TOKEN: ${OBSERVATION_ACCESS_TOKEN:-}
+            AUTH_DATABASE_URL: postgres://tolo_web:${TOLO_WEB_DB_PASSWORD:-tolo_web}@web-db:5432/tolo_web
+            AUTH_SECRET: ${AUTH_SECRET:-camera-e2e-bff-secret-that-is-long-enough}
             AUTH_IDP_ISSUER: http://idp:8080
             AUTH_IDP_CLIENT_ID: console-ui
             AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
+            AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_CONNECTION_REDIRECT_URI: http://localhost:3000/api/auth/connection/callback
+            AUTH_CONNECTION_TTL_SECONDS: "86400"
+            AUTH_RESOURCE_HOST: api.example.com
             FIREBASE_PROJECT_ID: demo-tolo
             FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
             FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
@@ -142,3 +176,7 @@ services:
                 condition: service_started
             idp:
                 condition: service_started
+            web-db:
+                condition: service_healthy
+            web-db-migrate:
+                condition: service_completed_successfully
