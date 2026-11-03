@@ -81,6 +81,22 @@ tasks:
             - ./scripts/compose-reachability-check.sh
             - ./scripts/gateway-log-token-check.sh
 
+    camera:e2e:
+        desc: Run the ESP32 camera authorization and connection e2e in Docker with local service builds.
+        env:
+            COMPOSE_FILE: compose.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml
+            COMPOSE_PROJECT_NAME: tolo-camera-e2e
+        cmds:
+            - ./scripts/camera-e2e.sh
+
+    camera:down:
+        desc: Stop the camera e2e stack. Pass -- -v to also delete the volumes.
+        env:
+            COMPOSE_FILE: compose.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml
+            COMPOSE_PROJECT_NAME: tolo-camera-e2e
+        cmds:
+            - docker compose down --remove-orphans {{.CLI_ARGS}}
+
     proposal:
         desc: Report measurements until Flow Control stores a detour proposal.
         cmds:

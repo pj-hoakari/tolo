@@ -1,0 +1,144 @@
+services:
+    server:
+        image: ${TOLO_GATEWAY_CAMERA_IMAGE:-tolo-service-gateway:camera-e2e}
+        build:
+            context: .
+            dockerfile: docker/gateway-camera.Dockerfile
+            additional_contexts:
+                gateway: ../tolo-service-gateway
+                observation: ../tolo-observation
+        ports: !override
+            - "18090:8080"
+
+    idp:
+        image: ${TOLO_IDP_CAMERA_IMAGE:-tolo-idp:camera-e2e}
+        build:
+            context: ../tolo-idp
+        environment:
+            SPRING_PROFILES_ACTIVE: dev-jvm
+        ports: !override
+            - "18080:8080"
+
+    idp-relation-stub:
+        image: ${TOLO_RELATION_STUB_CAMERA_IMAGE:-tolo-relation-stub:camera-e2e}
+        build:
+            context: ../tolo-relation-stub
+
+    idp-camera-user-seed:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        entrypoint: ["/bin/sh", "-c"]
+        command:
+            - |
+              set -eu
+              url="postgres://tolo_idp:$${TOLO_IDP_DB_PASSWORD}@idp-db:5432/tolo_idp?sslmode=disable"
+              for _ in $$(seq 1 180); do
+                if [ "$$(psql "$$url" -tAc "SELECT COUNT(*) FROM idp_users WHERE tenant_id = 'tenant-a' AND username = 'user-123'")" = "1" ]; then
+                  psql "$$url" --set=ON_ERROR_STOP=1 -c "
+                    INSERT INTO idp_users (id, tenant_id, username, password, enabled)
+                    SELECT gen_random_uuid()::text, '0123456789abcdef', username, password, enabled
+                    FROM idp_users
+                    WHERE tenant_id = 'tenant-a' AND username = 'user-123'
+                    ON CONFLICT (tenant_id, username) DO NOTHING;
+                    INSERT INTO idp_user_authorities (user_id, authority)
+                    SELECT fixed.id, legacy_authority.authority
+                    FROM idp_users fixed
+                    JOIN idp_users legacy
+                      ON legacy.tenant_id = 'tenant-a' AND legacy.username = 'user-123'
+                    JOIN idp_user_authorities legacy_authority
+                      ON legacy_authority.user_id = legacy.id
+                    WHERE fixed.tenant_id = '0123456789abcdef' AND fixed.username = 'user-123'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM idp_user_authorities existing
+                        WHERE existing.user_id = fixed.id
+                          AND existing.authority = legacy_authority.authority
+                      );
+                  "
+                  exit 0
+                fi
+                sleep 1
+              done
+              echo "the IdP seed user did not appear" >&2
+              exit 1
+        environment:
+            TOLO_IDP_DB_PASSWORD: ${TOLO_IDP_DB_PASSWORD:-tolo_idp}
+        networks:
+            - idp-store
+        depends_on:
+            idp-db:
+                condition: service_healthy
+            idp:
+                condition: service_started
+        restart: "no"
+
+    observation:
+        image: ${TOLO_OBS_CAMERA_IMAGE:-tolo-observation:camera-e2e}
+        build:
+            context: ../tolo-observation
+        depends_on: !override
+            observation-migrate:
+                condition: service_completed_successfully
+            server:
+                condition: service_started
+            nats:
+                condition: service_healthy
+
+    observation-migrate:
+        image: ${TOLO_OBS_MIGRATE_CAMERA_IMAGE:-tolo-observation-migrate:camera-e2e}
+        build:
+            context: ../tolo-observation
+            target: migrate
+
+    firebase-emulator:
+        image: ${TOLO_FIREBASE_EMULATOR_CAMERA_IMAGE:-tolo-firebase-emulator:camera-e2e}
+        build:
+            context: ./firebase-emulator
+        ports: !override
+            - "18086:8080"
+            - "19099:9099"
+            - "14000:4000"
+
+    edge-bridge:
+        image: ${TOLO_EDGE_BRIDGE_CAMERA_IMAGE:-tolo-edge-bridge:camera-e2e}
+        build:
+            context: ../tolo-edge-bridge
+        environment:
+            IDP_ISSUER: http://idp:8080
+            IDP_AUDIENCE: backend-api
+            IDP_JWKS_URL: http://idp:8080/oauth2/jwks
+            CONSOLE_CLIENT_ID: console-ui
+            EDGE_CLIENT_ID: edge-page
+            CAMERA_CLIENT_ID: esp-camera
+            CONNECTION_CLIENT_ID: observation-connection
+        ports: !override
+            - "18787:8787"
+
+    web:
+        image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
+        build:
+            context: ../tolo-web
+        environment:
+            ROOT_DOMAIN: localhost
+            AUTH_MOCKING: enabled
+            AUTH_MOCK_USER_ID: ${TOLO_OWNER_SUB:-user-owner}
+            TENANT_SUBDOMAIN_MOCKING: enabled
+            OBSERVATION_API_MOCKING: disabled
+            GATEWAY_URL: http://server:8080
+            SIGNALING_URL: http://edge-bridge:8787
+            TENANT_ACCESS_TOKEN: ${TENANT_ACCESS_TOKEN:-}
+            GRAPH_ACCESS_TOKEN: ${GRAPH_ACCESS_TOKEN:-}
+            OBSERVATION_ACCESS_TOKEN: ${OBSERVATION_ACCESS_TOKEN:-}
+            AUTH_IDP_ISSUER: http://idp:8080
+            AUTH_IDP_CLIENT_ID: console-ui
+            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            FIREBASE_PROJECT_ID: demo-tolo
+            FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
+            FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+        ports: !override
+            - "13000:3000"
+        depends_on: !override
+            server:
+                condition: service_started
+            edge-bridge:
+                condition: service_started
+            idp:
+                condition: service_started
