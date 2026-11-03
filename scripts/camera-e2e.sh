@@ -764,6 +764,33 @@ machine_rpc camera/listDelegatedCameras \
 expect_status 401 'old staff cookie after the machine handoff'
 printf '  the old staff cookie is no longer accepted\n'
 
+machine_cookie_header="$(cookie_header "${machine_cookies}")"
+call_redirect GET "${WEB_MACHINE_URL}/management" \
+    -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
+expect_not_status 200 'machine session opens the staff management page'
+printf '%s' "${location}" | grep -q '/auth/error?error=machine_session_forbidden' \
+    || die "the machine session was not sent to the forbidden error page: ${location}"
+if printf '%s' "${location}" | grep -q '/auth/login'; then
+    die "the machine session was sent to the staff login: ${location}"
+fi
+printf '  the machine session cannot open the management page as staff\n'
+
+machine_cookie_header="$(cookie_header "${machine_cookies}")"
+call_redirect GET "${WEB_MACHINE_URL}/auth/login?return=%2Fmanagement" \
+    -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
+expect_status 403 'machine session staff login start'
+printf '  the machine session cannot start a staff login\n'
+
+machine_cookie_header="$(cookie_header "${machine_cookies}.staff")"
+call_redirect GET "${WEB_MACHINE_URL}/management" \
+    -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
+expect_not_status 200 'old staff session after the machine handoff'
+printf '  the old staff session cannot be recovered\n'
+
+staff_sessions="$(db_count "SELECT count(*) FROM \"session\" WHERE kind = 'staff';")"
+[ "${staff_sessions}" = "0" ] \
+    || die "a staff session was recovered after the machine handoff (staff sessions=${staff_sessions})"
+
 machine_rpc signaling/requestCameraConnection \
     "$(jq -nc --arg e "${EVENT_ID}" --arg p "${page_id}" --arg c "${camera_id}" '{json:{eventId:$e,pageEdgeDeviceId:$p,cameraEdgeId:$c}}')" \
     "${machine_cookies}"
