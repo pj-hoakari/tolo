@@ -188,11 +188,18 @@ NPM_TOKEN=... docker compose -p toloidpcheck \
 `user-owner` と `password` でログインすると、`test.tolo.localhost` にセッションが引き渡され、管理画面に seed のイベントが出る  
 メンバーの管理画面から招待 URL を作ると、Gateway の監査に `CreateTenantInvitation` の `result=ok` が出る
 
+新しいテナントは `http://tolo.localhost/onboarding` から作れる  
+テナント名・サブドメイン名・オーナーの表示名を送ると、ログイン画面にアカウントの作成の入力が出るので、ID とパスワードを決める  
+所有権の取得が済むと `http://<サブドメイン名>.tolo.localhost/management` に移る
+
+招待 URL は、別のブラウザ（または別のプロファイル）で開いて「参加する」を押す  
+同じくアカウントを作ると受諾され、そのテナントの管理画面に移る  
+使用済みの招待で参加しようとすると、「この招待は使えません」と表示される
+
 ## 既知の制約
 
-tolo-web から Token Exchange で得た `event_access` は、Gateway で `invalid_token`（`scope is not a non-empty string`）になる  
-tolo-web は交換の要求に `scope` を付けず、tolo-idp 0.4.0 は `scope` のない交換に空の `scope` のトークンを発行するためである。観測ページのようにイベントの文脈で呼ぶ画面は、この構成ではまだ使えない  
-所有権の取得と招待の受諾は、registration トークンを取る手順をまだ用意していないので試せない  
+tolo-idp 0.4.0 は、`scope` のない Token Exchange に空の `scope` のトークンを発行し、Gateway はそれを `invalid_token` で拒否する  
+tolo-web は交換の要求に、tenant_access が持っている `events.*` の scope を付けて、これを避けている  
 Token Exchange には `openid` scope を渡せない（`invalid_scope` になる）ため、スクリプトは交換時に `openid` を落とす  
 IdP が発行するトークンには Gateway の仕様に無い `resource` claim（`https://api.example.com/tenants/<tenant_id>` 形式）が入るが、Gateway は無視する  
 JWT ヘッダに `typ` は入らず、`alg` は RS256、`kid` は IdP が起動ごとに作る ephemeral な鍵の UUID になる（`TOLO_IDP_JWK_ALLOW_EPHEMERAL=true`）  
