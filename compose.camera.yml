@@ -166,6 +166,11 @@ services:
             FIREBASE_PROJECT_ID: demo-tolo
             FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
             FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+        volumes:
+            - type: bind
+              source: ../tolo-web/public/models
+              target: /app/public/models
+              read_only: true
         ports: !override
             - "13000:3000"
         depends_on: !override
