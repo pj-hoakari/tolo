@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IDP_BASE_URL="${IDP_BASE_URL:-http://localhost:18080}"
+IDP_BASE_URL="${IDP_BASE_URL:-http://auth.tolo.localhost}"
 IDP_TENANT_ID="${IDP_TENANT_ID:-0123456789abcdef}"
 IDP_USERNAME="${IDP_USERNAME:-user-owner}"
 IDP_PASSWORD="${IDP_PASSWORD:-password}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-client-123}"
 IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:8080/login/oauth2/code/client-123}"
 IDP_RESOURCE_HOST="${IDP_RESOURCE_HOST:-api.example.com}"
-IDP_WEB_ORIGIN="${IDP_WEB_ORIGIN:-http://localhost:3000}"
+IDP_WEB_ORIGIN="${IDP_WEB_ORIGIN:-http://tolo.localhost}"
 
 usage() {
     cat >&2 <<'USAGE'
 usage: idp-signup.sh [-u base_url] [-t tenant_id]
-  -u  IdP base URL  (env IDP_BASE_URL,  default http://localhost:18080)
+  -u  IdP base URL  (env IDP_BASE_URL,  default http://auth.tolo.localhost)
   -t  tenant id     (env IDP_TENANT_ID, default 0123456789abcdef)
 USAGE
     exit 2

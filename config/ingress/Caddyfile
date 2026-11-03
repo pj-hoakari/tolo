@@ -1,0 +1,12 @@
+{
+	auto_https off
+	admin off
+}
+
+http://auth.tolo.localhost {
+	reverse_proxy idp:8080
+}
+
+http://tolo.localhost, http://*.tolo.localhost {
+	reverse_proxy web:3000
+}

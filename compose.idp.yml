@@ -1,7 +1,7 @@
 services:
     server:
         environment:
-            IDP_ISSUER: http://idp:8080
+            IDP_ISSUER: http://auth.tolo.localhost
             IDP_AUDIENCE: backend-api
             IDP_INTROSPECTION_CLIENT_ID: service-gateway
             IDP_INTROSPECTION_CLIENT_SECRET_FILE: /etc/tolo/idp-seed/introspection-client-secret
@@ -16,6 +16,19 @@ services:
                 condition: service_completed_successfully
             idp:
                 condition: service_started
+            ingress:
+                condition: service_started
+
+    ingress:
+        image: caddy:2-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+        ports:
+            - "80:80"
+        volumes:
+            - ./config/ingress/Caddyfile:/etc/caddy/Caddyfile:ro
+        networks:
+            idp:
+                aliases:
+                    - auth.tolo.localhost
 
     idp-seed-secret:
         image: alpine/openssl:3.5.8@sha256:3f25da71f70eba788067daac3f3df03bd1de7a7c52ed89fa93b94ad2c92d986b
@@ -41,15 +54,19 @@ services:
             SPRING_DATASOURCE_USERNAME: tolo_idp
             SPRING_DATASOURCE_PASSWORD: ${TOLO_IDP_DB_PASSWORD:-tolo_idp}
             SPRING_FLYWAY_LOCATIONS: classpath:db/postgresql
-            TOLO_IDP_ISSUER: http://idp:8080
+            TOLO_IDP_ISSUER: http://auth.tolo.localhost
+            TOLO_IDP_LOGIN_PAGE_URL: http://tolo.localhost/login
+            TOLO_IDP_LOGIN_ERROR_PAGE_URL: http://tolo.localhost/auth/error
+            SPRING_CONFIG_ADDITIONAL_LOCATION: file:/etc/tolo-idp/console-ui.yaml
             TOLO_IDP_RATE_LIMIT_REDIS_URI: redis://idp-redis:6379
             TOLO_IDP_RELATION_BASE_URL: http://tenant-management:8080
             TOLO_IDP_SEED_ENABLED: "true"
             TOLO_IDP_SEED_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
             TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET: ${TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET:-gateway-secret}
+            TOLO_IDP_CONSOLE_UI_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
             TOLO_IDP_JWK_ALLOW_EPHEMERAL: "true"
-        ports:
-            - "18080:8080"
+        volumes:
+            - ./config/idp/console-ui.yaml:/etc/tolo-idp/console-ui.yaml:ro
         networks:
             - idp
             - idp-store

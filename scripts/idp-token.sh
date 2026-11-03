@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IDP_BASE_URL="${IDP_BASE_URL:-http://localhost:18080}"
+IDP_BASE_URL="${IDP_BASE_URL:-http://auth.tolo.localhost}"
 IDP_TENANT_ID="${IDP_TENANT_ID:-0123456789abcdef}"
 IDP_SCOPE="${IDP_SCOPE:-openid tenant.read events.read}"
 IDP_USERNAME="${IDP_USERNAME:-user-owner}"
@@ -12,12 +12,12 @@ IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:8080/login/oauth2/code/cl
 IDP_AUDIENCE="${IDP_AUDIENCE:-backend-api}"
 IDP_EVENT_ID="${IDP_EVENT_ID:-}"
 IDP_RESOURCE_HOST="${IDP_RESOURCE_HOST:-api.example.com}"
-IDP_WEB_ORIGIN="${IDP_WEB_ORIGIN:-http://localhost:3000}"
+IDP_WEB_ORIGIN="${IDP_WEB_ORIGIN:-http://tolo.localhost}"
 
 usage() {
     cat >&2 <<'EOF'
 usage: idp-token.sh [-u base_url] [-t tenant_id] [-s scope] [-e event_id]
-  -u  IdP base URL            (env IDP_BASE_URL,   default http://localhost:18080)
+  -u  IdP base URL            (env IDP_BASE_URL,   default http://auth.tolo.localhost)
   -t  tenant id               (env IDP_TENANT_ID,  default 0123456789abcdef)
   -s  space separated scopes  (env IDP_SCOPE,      default "openid tenant.read events.read")
   -e  event id                (env IDP_EVENT_ID,   exchanges the token for an event_access token)

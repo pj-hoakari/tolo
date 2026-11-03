@@ -52,7 +52,8 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.guest.yml` | Guest Service とその DB・マイグレーション |
 | `compose.rt.yml` | Realtime とその DB・マイグレーション。`compose.edge.yml` の Firebase Emulator を使う |
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
-| `compose.idp.yml` | 実物の IdP（tolo-idp）。`compose.tm.yml` が要る。`server` はホストの 18090 に移る |
+| `compose.idp.yml` | 実物の IdP（tolo-idp）と ingress（ホストの 80 番）。`compose.tm.yml` が要る。`server` はホストの 18090 に移る |
+| `compose.idp-web.yml` | tolo-web を実物の IdP につなぐ。`compose.web.yml` と `compose.idp.yml` が要る |
 | `compose.o11y.yml` | Jaeger |
 
 `firebase-emulator/firestore.rules` は、Edge Bridge Service のシグナリング文書と Realtime の最終更新 ID 文書（`deliveryNotifications`）のルールを合わせた、本番の Firebase プロジェクトと同じ内容にする  

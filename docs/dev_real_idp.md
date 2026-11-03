@@ -6,10 +6,10 @@ IdP は所属を Tenant Management の所属参照 API から引くので、`com
 ## 構成
 
 ```bash
-docker compose -p toloidpcheck -f compose.yml -f compose.idp.yml -f compose.tm.yml up -d
+docker compose -p toloidpcheck -f compose.yml -f compose.tm.yml -f compose.idp.yml up -d
 ```
 
-追加されるサービスは `idp`・`idp-db`（PostgreSQL 18）・`idp-redis`（Redis 8。IdP のレート制限に必須）・`idp-seed-secret`（失効照会用の secret を書き出す init サービス）になる  
+追加されるサービスは `ingress`（Caddy。ホストの 80 番）・`idp`・`idp-db`（PostgreSQL 18）・`idp-redis`（Redis 8。IdP のレート制限に必須）・`idp-seed-secret`（失効照会用の secret を書き出す init サービス）になる  
 fake IdP は compose のサービスではないので、この構成では `task fakeidp:up` を実行しない。`server` の `depends_on` には `idp-seed-secret` と `idp` が加わる
 
 公開ポートは base の `server`（8080）と fake IdP（8082）に重ならないようにずらしてある  
@@ -19,12 +19,24 @@ fake IdP は compose のサービスではないので、この構成では `tas
 | --- | --- | --- |
 | `server`（公開用） | `http://localhost:18090` | `http://server:8080` |
 | `server`（内部用） | （公開しない） | `http://server:8090` |
-| `idp` | `http://localhost:18080` | `http://idp:8080` |
+| `ingress` | `http://auth.tolo.localhost`、`http://tolo.localhost`、`http://*.tolo.localhost` | `http://auth.tolo.localhost` |
+| `idp` | （`ingress` 越し） | `http://idp:8080` |
 | `tenant-management` | （公開しない） | `http://tenant-management:8080` |
 
-issuer はコンテナ内の名前 `http://idp:8080` で統一してある  
-`server` の `IDP_ISSUER`、IdP の `TOLO_IDP_ISSUER`、発行されるトークンの `iss` がこの 1 つの文字列で一致し、Discovery の検証が通る  
-IdP は Discovery 文書にも `iss` にも設定値をそのまま使い、リクエストの Host を見ないため、ホストから `http://localhost:18080` で叩いてもトークンは取得できる
+### ingress と issuer
+
+issuer は `http://auth.tolo.localhost` で、ブラウザ・ホストの curl・コンテナのどれからも同じ URL で IdP に届く  
+本番で IdP を `auth.<ルートドメイン>` に置き、ingress の前で振り分ける形（ADR-0121）を、手元で同じように組んでいる
+
+- ホストからは`*.localhost` の名前がループバックに解決され、ホストの 80 番の `ingress` に届く
+- コンテナからはネットワーク `tolo-idp` の別名 `auth.tolo.localhost` で `ingress` に届く。本番でクラスタ内の DNS が `auth.<ルートドメイン>` を IdP に向けるのに当たる
+- `ingress` は Host で振り分け、`auth.tolo.localhost` を `idp:8080` へ、`tolo.localhost` とその下のホストを `web:3000` へ転送する（`config/ingress/Caddyfile`）
+
+`server` の `IDP_ISSUER`、IdP の `TOLO_IDP_ISSUER`、発行されるトークンの `iss` がこの 1 つの文字列で一致し、Discovery の検証が通る
+
+ルートドメインを `localhost` ではなく `tolo.localhost` にしているのは、ブラウザが `localhost` の下のホストどうしを別のサイトとして扱うためである  
+`localhost` と `auth.localhost` は別のサイトになり、ログイン画面から IdP の `/api/login` を呼んで作った IdP の Cookie（`SameSite=Lax`）が、そのあとの IdP への遷移に付かない  
+`tolo.localhost`・`auth.tolo.localhost`・`test.tolo.localhost` は、本番の `example.com` とその下のホストと同じく、同じサイトになる
 
 片付けは `docker compose -p toloidpcheck -f compose.yml -f compose.idp.yml -f compose.tm.yml down -v` になる
 
@@ -38,9 +50,12 @@ ghcr に公開されている native ビルドのイメージ（`ghcr.io/pj-hoak
 ### プロファイル
 
 IdP には `SPRING_PROFILES_ACTIVE=dev-native` を渡す  
-client（`client-123` と `service-gateway`）とログイン画面の URL（`http://localhost:3000/login`）は、tolo-idp の `application.yaml` の dev プロファイルにしか定義されていない  
+client（`client-123` と `service-gateway`）は、tolo-idp の `application.yaml` の dev プロファイルにしか定義されていない  
 native イメージは何も指定しないと production プロファイルで起動し、client が 1 つも登録されない  
-DB・Redis・relation の参照先・issuer は、プロファイルの値を環境変数で上書きしている
+DB・Redis・relation の参照先・issuer・ログイン画面の URL（`http://tolo.localhost/login`）は、プロファイルの値を環境変数で上書きしている
+
+tolo-web 用の client `console-ui` は、`config/idp/console-ui.yaml` に定義し、`SPRING_CONFIG_ADDITIONAL_LOCATION` で読ませる  
+`redirect_uri` は `http://tolo.localhost/api/auth/callback/tolo-idp`、`post_logout_redirect_uri` は `http://tolo.localhost/auth/logged-out` で、secret は `TOLO_IDP_CONSOLE_UI_CLIENT_SECRET`（既定 `console-secret`）になる
 
 ### 所属の参照先
 
@@ -94,20 +109,20 @@ TOKEN=$(./scripts/idp-token.sh -s "openid tenant.read events.read")
 
 | 引数 | 環境変数 | 既定 |
 | --- | --- | --- |
-| `-u` | `IDP_BASE_URL` | `http://localhost:18080` |
+| `-u` | `IDP_BASE_URL` | `http://auth.tolo.localhost` |
 | `-t` | `IDP_TENANT_ID` | `0123456789abcdef` |
 | `-s` | `IDP_SCOPE` | `openid tenant.read events.read` |
 | `-e` | `IDP_EVENT_ID` | （空。指定すると Token Exchange で `event_access` にする） |
 
 流れは次の 4 段になる
 
-1. `resource` 付きの authorize がログイン画面（`http://localhost:3000/login`）へ `challenge` を付けて 302 を返す
+1. `resource` 付きの authorize がログイン画面（`http://tolo.localhost/login`）へ `challenge` を付けて 302 を返す
 2. `/api/login` に資格情報と `challenge` を送り、IdP のセッションを作る
 3. `/oauth2/authorize?challenge=…` で元の認可要求を再開し、認可コードを受け取る
 4. 認可コードを token に交換する
 
 ログイン画面は開かず、302 の `Location` から `challenge` だけを取り出す  
-`/api/login` には、ログイン画面の origin（`IDP_WEB_ORIGIN`、既定 `http://localhost:3000`）を `Origin` に付けて送る  
+`/api/login` には、ログイン画面の origin（`IDP_WEB_ORIGIN`、既定 `http://tolo.localhost`）を `Origin` に付けて送る  
 PKCE の verifier と challenge はスクリプト内で `openssl` を使って生成する  
 client と redirect_uri は tolo-idp の dev プロファイルの値を既定にしていて、`IDP_USERNAME`・`IDP_PASSWORD`・`IDP_CLIENT_ID`・`IDP_CLIENT_SECRET`・`IDP_REDIRECT_URI` で変えられる
 
@@ -153,9 +168,30 @@ EVENT_TOKEN=$(./scripts/idp-token.sh -s "openid tenant.read events.read events.m
 | 失効させたトークンでの `CreateTenantInvitation` | `unauthenticated` |
 | `-e` での Token Exchange | `token_use` が `event_access` で、`event_id` が載ったトークンが返る |
 
+## tolo-web からのログイン
+
+`compose.idp-web.yml` は、tolo-web を認証のモックではなく実物の IdP につなぐオーバーライドになる  
+`compose.edge.yml`・`compose.web.yml`・`compose.idp.yml`・`compose.tm.yml` と一緒に使う
+
+```bash
+NPM_TOKEN=... docker compose -p toloidpcheck \
+  -f compose.yml -f compose.tm.yml -f compose.idp.yml \
+  -f compose.edge.yml -f compose.web.yml -f compose.idp-web.yml up -d
+```
+
+- `web` は `ROOT_DOMAIN=tolo.localhost`、`AUTH_MOCKING=disabled` で動き、client `console-ui` で IdP にログインする
+- `web` のホストの 3000 番は外し、`ingress` 越しの `http://tolo.localhost` と `http://test.tolo.localhost` で開く。tolo-web はルートドメインの origin にポートを付けないので、80 番で公開する必要がある
+- Better Auth の DB は `web-auth-db`（PostgreSQL 18）で、tolo-web のイメージの `db/auth.sql` を `web-auth-schema` が取り出し、DB の初回の起動で流す
+- `edge-bridge` も issuer と JWKS を `http://auth.tolo.localhost` に向ける
+
+ユーザーと所属を「ユーザーと所属の用意」の手順で入れたあと、`http://test.tolo.localhost/management` を開くと、ルートドメインのログイン画面（`http://tolo.localhost/login`）に移る  
+`user-owner` と `password` でログインすると、`test.tolo.localhost` にセッションが引き渡され、管理画面に seed のイベントが出る  
+メンバーの管理画面から招待 URL を作ると、Gateway の監査に `CreateTenantInvitation` の `result=ok` が出る
+
 ## 既知の制約
 
-tolo-web はまだ実物の IdP につないでいない（`compose.web.yml` は `AUTH_MOCKING=enabled`）  
+tolo-web から Token Exchange で得た `event_access` は、Gateway で `invalid_token`（`scope is not a non-empty string`）になる  
+tolo-web は交換の要求に `scope` を付けず、tolo-idp 0.4.0 は `scope` のない交換に空の `scope` のトークンを発行するためである。観測ページのようにイベントの文脈で呼ぶ画面は、この構成ではまだ使えない  
 所有権の取得と招待の受諾は、registration トークンを取る手順をまだ用意していないので試せない  
 Token Exchange には `openid` scope を渡せない（`invalid_scope` になる）ため、スクリプトは交換時に `openid` を落とす  
 IdP が発行するトークンには Gateway の仕様に無い `resource` claim（`https://api.example.com/tenants/<tenant_id>` 形式）が入るが、Gateway は無視する  
