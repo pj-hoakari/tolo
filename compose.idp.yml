@@ -3,9 +3,8 @@ services:
         environment:
             IDP_ISSUER: http://idp:8080
             IDP_AUDIENCE: backend-api
-            IDP_INTROSPECTION_CLIENT_ID: client-123
+            IDP_INTROSPECTION_CLIENT_ID: service-gateway
             IDP_INTROSPECTION_CLIENT_SECRET_FILE: /etc/tolo/idp-seed/introspection-client-secret
-            IDP_LEGACY_EVENTS_WRITE_SCOPE: ${IDP_LEGACY_EVENTS_WRITE_SCOPE:-}
         ports: !override
             - "18090:8080"
         volumes:
@@ -28,14 +27,15 @@ services:
               chown 65532:65532 /idp/introspection-client-secret
               chmod 0400 /idp/introspection-client-secret
         environment:
-            SEED_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            SEED_CLIENT_SECRET: ${TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET:-gateway-secret}
         volumes:
             - idp-seed-introspection:/idp
         restart: "no"
 
     idp:
-        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:0.2.0@sha256:11a61ab21867090b4b3b02510e91f80a2058bce37fa0064027ebefa3fe4f9ca4}
+        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:0.4.0@sha256:be918fbd97c1c409140b2185556d07cddbf433eb066c9bc0acabdbfd263da085}
         environment:
+            SPRING_PROFILES_ACTIVE: dev-native
             SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
             SPRING_DATASOURCE_URL: jdbc:postgresql://idp-db:5432/tolo_idp
             SPRING_DATASOURCE_USERNAME: tolo_idp
@@ -43,34 +43,22 @@ services:
             SPRING_FLYWAY_LOCATIONS: classpath:db/postgresql
             TOLO_IDP_ISSUER: http://idp:8080
             TOLO_IDP_RATE_LIMIT_REDIS_URI: redis://idp-redis:6379
-            TOLO_IDP_RELATION_BASE_URL: http://idp-relation-stub:8080
+            TOLO_IDP_RELATION_BASE_URL: http://tenant-management:8080
             TOLO_IDP_SEED_ENABLED: "true"
             TOLO_IDP_SEED_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET: ${TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET:-gateway-secret}
             TOLO_IDP_JWK_ALLOW_EPHEMERAL: "true"
         ports:
             - "18080:8080"
         networks:
             - idp
             - idp-store
+            - tenant-management
         depends_on:
             idp-db:
                 condition: service_healthy
             idp-redis:
                 condition: service_healthy
-            idp-relation-stub:
-                condition: service_started
-
-    idp-relation-stub:
-        image: ghcr.io/pj-hoakari/tolo-relation-stub:latest@sha256:c65b5602c0f8ff74a2682cedfb84afed040ce25fd46c9a267a2c7d379ed50601
-        environment:
-            RELATION_ADDR: ":8080"
-            RELATION_DATA: ${TOLO_RELATION_DATA:-/data/relation.json}
-        ports:
-            - "18081:8080"
-        volumes:
-            - ./config/idp:/data:ro
-        networks:
-            - idp-store
 
     idp-db:
         image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
