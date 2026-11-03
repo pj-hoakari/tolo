@@ -4,10 +4,10 @@ services:
             - tenant-management
 
     tenant-management:
-        image: ${TOLO_TM_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management:sha-612260d}
+        image: ${TOLO_TM_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management:sha-a9976bd}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-tenant-management.git#612260d52c9da5cfe613502d806bc8f781ee9ae4
+            context: https://github.com/pj-hoakari/tolo-tenant-management.git#a9976bd5ef8dc84a8784dba6f692bfef57a87dc5
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://tenant-management-db:5432/tenant_management?sslmode=disable&user=tenant_management&password=${TOLO_TM_DB_PASSWORD:-tenant_management}
@@ -24,10 +24,10 @@ services:
                 condition: service_started
 
     tenant-management-migrate:
-        image: ${TOLO_TM_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management-migrate:sha-612260d}
+        image: ${TOLO_TM_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management-migrate:sha-a9976bd}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-tenant-management.git#612260d52c9da5cfe613502d806bc8f781ee9ae4
+            context: https://github.com/pj-hoakari/tolo-tenant-management.git#a9976bd5ef8dc84a8784dba6f692bfef57a87dc5
             target: migrate
         command:
             - -database
