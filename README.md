@@ -173,7 +173,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 | `task e2e` | オンボーディング・招待の受諾・固定テナントのサブドメイン・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
-GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.edge.yml` と `compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
+GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
 
 ## ドキュメント
 
