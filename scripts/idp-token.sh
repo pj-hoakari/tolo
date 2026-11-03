@@ -4,7 +4,7 @@ set -euo pipefail
 IDP_BASE_URL="${IDP_BASE_URL:-http://localhost:18080}"
 IDP_TENANT_ID="${IDP_TENANT_ID:-0123456789abcdef}"
 IDP_SCOPE="${IDP_SCOPE:-openid tenant.read events.read}"
-IDP_USERNAME="${IDP_USERNAME:-user-123}"
+IDP_USERNAME="${IDP_USERNAME:-user-owner}"
 IDP_PASSWORD="${IDP_PASSWORD:-password}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-client-123}"
 IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-secret}"
@@ -12,6 +12,7 @@ IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:8080/login/oauth2/code/cl
 IDP_AUDIENCE="${IDP_AUDIENCE:-backend-api}"
 IDP_EVENT_ID="${IDP_EVENT_ID:-}"
 IDP_RESOURCE_HOST="${IDP_RESOURCE_HOST:-api.example.com}"
+IDP_WEB_ORIGIN="${IDP_WEB_ORIGIN:-http://localhost:3000}"
 
 usage() {
     cat >&2 <<'EOF'
@@ -48,17 +49,13 @@ trap 'rm -f "${cookies}"' EXIT
 verifier="$(openssl rand 32 | b64url)"
 challenge="$(printf '%s' "${verifier}" | openssl dgst -sha256 -binary | b64url)"
 
-login_status="$(
-    curl -sS -o /dev/null -w '%{http_code}' -c "${cookies}" \
-        -H 'Content-Type: application/json' \
-        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg t "${IDP_TENANT_ID}" \
-            '{username: $u, password: $p, tenantId: $t}')" \
-        "${IDP_BASE_URL}/api/login"
-)"
-[ "${login_status}" = "200" ] || die "login failed with HTTP ${login_status}"
+location_of() {
+    curl -sS -o /dev/null -D - -b "${cookies}" -c "${cookies}" "$@" |
+        tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1
+}
 
-location="$(
-    curl -sS -o /dev/null -D - -b "${cookies}" -c "${cookies}" -G \
+login_page="$(
+    location_of -G \
         --data-urlencode 'response_type=code' \
         --data-urlencode "client_id=${IDP_CLIENT_ID}" \
         --data-urlencode "redirect_uri=${IDP_REDIRECT_URI}" \
@@ -66,11 +63,25 @@ location="$(
         --data-urlencode 'state=state' \
         --data-urlencode 'nonce=nonce' \
         --data-urlencode "audience=${IDP_AUDIENCE}" \
+        --data-urlencode "resource=https://${IDP_RESOURCE_HOST}/tenants/${IDP_TENANT_ID}" \
         --data-urlencode "code_challenge=${challenge}" \
         --data-urlencode 'code_challenge_method=S256' \
-        "${IDP_BASE_URL}/oauth2/authorize" |
-        tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1
+        "${IDP_BASE_URL}/oauth2/authorize"
 )"
+login_challenge="$(printf '%s' "${login_page}" | sed -n 's/.*[?&]challenge=\([^&]*\).*/\1/p')"
+[ -n "${login_challenge}" ] || die "authorize returned no login challenge: ${login_page}"
+
+login_status="$(
+    curl -sS -o /dev/null -w '%{http_code}' -b "${cookies}" -c "${cookies}" \
+        -H 'Content-Type: application/json' \
+        -H "Origin: ${IDP_WEB_ORIGIN}" \
+        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg c "${login_challenge}" \
+            '{username: $u, password: $p, challenge: $c}')" \
+        "${IDP_BASE_URL}/api/login"
+)"
+[ "${login_status}" = "200" ] || die "login failed with HTTP ${login_status}"
+
+location="$(location_of -G --data-urlencode "challenge=${login_challenge}" "${IDP_BASE_URL}/oauth2/authorize")"
 [ -n "${location}" ] || die 'authorize returned no Location header'
 
 code="$(printf '%s' "${location}" | sed -n 's/.*[?&]code=\([^&]*\).*/\1/p')"
