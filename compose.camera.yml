@@ -2,10 +2,9 @@ services:
     server:
         image: ${TOLO_GATEWAY_CAMERA_IMAGE:-tolo-service-gateway:camera-e2e}
         build:
-            context: .
-            dockerfile: docker/gateway-camera.Dockerfile
+            context: ../tolo-service-gateway
+            dockerfile: Dockerfile
             additional_contexts:
-                gateway: ../tolo-service-gateway
                 observation: ../tolo-observation
         ports: !override
             - "18090:8080"

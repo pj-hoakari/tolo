@@ -157,7 +157,8 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 
 `task camera:e2e` は、ESP32 の実機を使わずに、カメラのデバイス認可から signaling の接続までを通しで確かめる
 `compose.camera.yml` を重ね、`tolo-idp`・`tolo-observation`・`tolo-edge-bridge`・`tolo-web` を手元のリポジトリからビルドする
-Gateway も、固定コミットの Gateway が古い Observation の proto を持ち `kind` と `cameraLinks` を落とすため、現在の Observation の proto を差し込んで `docker/gateway-camera.Dockerfile` からビルドする
+Gateway も手元の `tolo-service-gateway` から通常の `Dockerfile` でビルドし、追加のビルドコンテキストで手元の `tolo-observation` を渡す。専用の Dockerfile は使わない
+Observation を公開したあとに固定コミットへ戻す手順は、tolo-service-gateway の README にある
 relation stub は、`compose.idp.yml` が固定する版に membership API がないため、手元の `tolo-relation-stub` からビルドする
 Tenant Management・Graph Authoring などは、ほかの compose と同じ固定コミットのイメージを使う
 
