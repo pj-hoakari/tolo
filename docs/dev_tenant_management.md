@@ -183,4 +183,4 @@ Gateway は登録表に無いパスを転送しないので、`http://localhost:
 
 実物の IdP との組み合わせ（`-f compose.yml -f compose.idp.yml -f compose.tm.yml`）では、IdP が所属を Tenant Management の所属参照 API から引く  
 手順は [実物の IdP での開発](dev_real_idp.md) にある  
-所有権の取得と招待の受諾を実物の IdP で通す手順は、まだ用意していない
+所有権の取得と招待の受諾を実物の IdP で通すには、tolo-web からオンボーディングと招待の受諾を行う（[実物の IdP での開発](dev_real_idp.md) の「tolo-web からのログイン」）

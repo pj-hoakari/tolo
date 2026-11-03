@@ -37,10 +37,6 @@ expect() {
     [ "${status}" = "$1" ] || { printf 'expected HTTP %s, got %s\n' "$1" "${status}" >&2; exit 1; }
 }
 
-expect_rejected() {
-    case "${status}" in 2??) printf 'expected a rejection, got HTTP %s\n' "${status}" >&2; exit 1 ;; esac
-}
-
 token() {
     FAKEIDP_BASE_URL="${FAKEIDP_BASE_URL}" "${token_script}" "$@"
 }
@@ -133,7 +129,7 @@ outsider_registration_token="$(token -k registration -b "${OUTSIDER_SUB}" -s 'te
 call tolo.relation.v1.RelationAdminService/AcceptTenantInvitation \
     "$(jq -nc --arg t "${tenant_id}" --arg i "${invitation_token}" '{tenantId: $t, invitationToken: $i}')" \
     "${outsider_registration_token}"
-expect_rejected
+expect 403
 
 call tolo.relation.v1.RelationAdminService/ListMemberships \
     "$(jq -nc --arg t "${tenant_id}" '{tenantId: $t}')" "${owner_token}"
