@@ -4,7 +4,8 @@ services:
             - tenant-management
 
     tenant-management:
-        image: ${TOLO_TM_IMAGE:-tolo-tenant-management:612260d}
+        image: ${TOLO_TM_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management:sha-612260d}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-tenant-management.git#612260d52c9da5cfe613502d806bc8f781ee9ae4
         environment:
@@ -23,7 +24,8 @@ services:
                 condition: service_started
 
     tenant-management-migrate:
-        image: ${TOLO_TM_MIGRATE_IMAGE:-tolo-tenant-management-migrate:612260d}
+        image: ${TOLO_TM_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-tenant-management-migrate:sha-612260d}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-tenant-management.git#612260d52c9da5cfe613502d806bc8f781ee9ae4
             target: migrate

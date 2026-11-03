@@ -23,9 +23,12 @@ jobs:
             - name: Set up Task
               uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
 
+            - name: Build the Firebase Emulator
+              run: docker compose build firebase-emulator
+
             - name: Start services
               id: up
-              run: task up
+              run: task up -- --no-build
 
             - name: Start the fake IdP
               run: task fakeidp:up

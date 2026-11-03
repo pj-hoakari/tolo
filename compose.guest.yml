@@ -8,7 +8,8 @@ services:
             - guest
 
     guest:
-        image: ${TOLO_GUEST_IMAGE:-tolo-guest:1978068}
+        image: ${TOLO_GUEST_IMAGE:-ghcr.io/pj-hoakari/tolo-guest:sha-1978068}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-guest.git#19780687024e2fd704a4b68ec475e11e473e3cc0
         environment:
@@ -31,7 +32,8 @@ services:
                 condition: service_started
 
     guest-migrate:
-        image: ${TOLO_GUEST_MIGRATE_IMAGE:-tolo-guest-migrate:1978068}
+        image: ${TOLO_GUEST_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-guest-migrate:sha-1978068}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-guest.git#19780687024e2fd704a4b68ec475e11e473e3cc0
             target: migrate

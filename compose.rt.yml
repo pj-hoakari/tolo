@@ -12,7 +12,8 @@ services:
             - realtime-firebase
 
     realtime:
-        image: ${TOLO_RT_IMAGE:-tolo-realtime:1ea746e}
+        image: ${TOLO_RT_IMAGE:-ghcr.io/pj-hoakari/tolo-realtime:sha-1ea746e}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-realtime.git#1ea746e92f6a51b4dcbed3ec8f004dd6ba679b43
         environment:
@@ -38,7 +39,8 @@ services:
                 condition: service_started
 
     realtime-migrate:
-        image: ${TOLO_RT_MIGRATE_IMAGE:-tolo-realtime-migrate:1ea746e}
+        image: ${TOLO_RT_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-realtime-migrate:sha-1ea746e}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-realtime.git#1ea746e92f6a51b4dcbed3ec8f004dd6ba679b43
             target: migrate

@@ -1,6 +1,7 @@
 services:
     flow-control:
-        image: ${TOLO_FLOW_IMAGE:-tolo-flow-control:9b61876}
+        image: ${TOLO_FLOW_IMAGE:-ghcr.io/pj-hoakari/tolo-flow-control:sha-9b61876}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-flow-control.git#9b61876d63f00609b67664977dd32a956b4ecad2
         environment:

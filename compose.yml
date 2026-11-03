@@ -23,7 +23,8 @@ services:
         restart: "no"
 
     server:
-        image: ${TOLO_GATEWAY_IMAGE:-tolo-service-gateway:b100925}
+        image: ${TOLO_GATEWAY_IMAGE:-ghcr.io/pj-hoakari/tolo-service-gateway:sha-b100925}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-service-gateway.git#b100925e2de706e8ca51d22b549f7c0541826169
             target: server
@@ -63,7 +64,8 @@ services:
             retries: 10
 
     push-relay:
-        image: ${TOLO_PUSH_RELAY_IMAGE:-jetstream-http-push:ef072ef}
+        image: ${TOLO_PUSH_RELAY_IMAGE:-ghcr.io/pj-hoakari/jetstream-http-push:sha-ef072ef}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/jetstream-http-push.git#ef072ef951b5d77c5d02fbe79e1d5ce81ed0b2fa
         environment:

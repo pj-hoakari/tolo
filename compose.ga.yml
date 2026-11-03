@@ -4,7 +4,8 @@ services:
             - graph-authoring
 
     graph-authoring:
-        image: ${TOLO_GA_IMAGE:-tolo-graph-authoring:d82aada}
+        image: ${TOLO_GA_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring:sha-d82aada}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-graph-authoring.git#d82aada3c8d8ef14a7bf4dd5eb708ba0a35fa9f2
         environment:
@@ -24,7 +25,8 @@ services:
                 condition: service_started
 
     graph-authoring-migrate:
-        image: ${TOLO_GA_MIGRATE_IMAGE:-tolo-graph-authoring-migrate:d82aada}
+        image: ${TOLO_GA_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring-migrate:sha-d82aada}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-graph-authoring.git#d82aada3c8d8ef14a7bf4dd5eb708ba0a35fa9f2
             target: migrate
