@@ -76,9 +76,21 @@ tasks:
             - ./scripts/tenant-subdomain-seed-check.sh
             - ./scripts/graph-authoring-event-check.sh
             - ./scripts/observation-measurement-check.sh
-            - ./scripts/operation-delivery-check.sh
-            - ./scripts/compose-reachability-check.sh
+            - task: e2e:concurrent
             - ./scripts/gateway-log-token-check.sh
+
+    e2e:concurrent:
+        internal: true
+        deps:
+            - task: e2e:script
+              vars: { SCRIPT: operation-delivery-check.sh }
+            - task: e2e:script
+              vars: { SCRIPT: compose-reachability-check.sh }
+
+    e2e:script:
+        internal: true
+        cmds:
+            - ./scripts/{{.SCRIPT}}
 
     proposal:
         desc: Report measurements until Flow Control stores a detour proposal.
