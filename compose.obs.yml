@@ -25,7 +25,8 @@ services:
             - observation
 
     observation:
-        image: ${TOLO_OBS_IMAGE:-tolo-observation:8cf354a}
+        image: ${TOLO_OBS_IMAGE:-ghcr.io/pj-hoakari/tolo-observation:sha-8cf354a}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-observation.git#8cf354a80f446a164ff18b38afb55fbe9649a543
         environment:
@@ -53,7 +54,8 @@ services:
                 condition: service_started
 
     observation-migrate:
-        image: ${TOLO_OBS_MIGRATE_IMAGE:-tolo-observation-migrate:8cf354a}
+        image: ${TOLO_OBS_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-observation-migrate:sha-8cf354a}
+        pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-observation.git#8cf354a80f446a164ff18b38afb55fbe9649a543
             target: migrate
