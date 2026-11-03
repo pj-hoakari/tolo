@@ -1,0 +1,59 @@
+services:
+    edge-bridge:
+        environment:
+            IDP_ISSUER: http://auth.tolo.localhost
+            IDP_JWKS_URL: http://auth.tolo.localhost/oauth2/jwks
+
+    web:
+        environment:
+            ROOT_DOMAIN: tolo.localhost
+            AUTH_MOCKING: disabled
+            AUTH_DATABASE_URL: postgres://tolo_web_auth:${TOLO_WEB_AUTH_DB_PASSWORD:-tolo_web_auth}@web-auth-db:5432/tolo_web_auth
+            AUTH_SECRET: ${TOLO_WEB_AUTH_SECRET:-tolo-web-development-secret-0123456789}
+            AUTH_IDP_ISSUER: http://auth.tolo.localhost
+            AUTH_IDP_CLIENT_ID: console-ui
+            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
+            AUTH_RESOURCE_HOST: api.example.com
+        ports: !reset []
+        networks:
+            - web-auth-db
+        depends_on:
+            web-auth-db:
+                condition: service_healthy
+            ingress:
+                condition: service_started
+
+    web-auth-schema:
+        image: ${TOLO_WEB_IMAGE:-tolo-web:616e3bf}
+        command: ["cp", "/app/db/auth.sql", "/schema/auth.sql"]
+        volumes:
+            - web-auth-schema:/schema
+        network_mode: none
+        restart: "no"
+
+    web-auth-db:
+        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        environment:
+            POSTGRES_DB: tolo_web_auth
+            POSTGRES_USER: tolo_web_auth
+            POSTGRES_PASSWORD: ${TOLO_WEB_AUTH_DB_PASSWORD:-tolo_web_auth}
+        volumes:
+            - web-auth-schema:/docker-entrypoint-initdb.d:ro
+        networks:
+            - web-auth-db
+        depends_on:
+            web-auth-schema:
+                condition: service_completed_successfully
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 5s
+
+volumes:
+    web-auth-schema:
+
+networks:
+    web-auth-db:
+        internal: true
