@@ -179,3 +179,46 @@ services:
                 condition: service_healthy
             web-db-migrate:
                 condition: service_completed_successfully
+
+    web-machine:
+        image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
+        environment:
+            ROOT_DOMAIN: localhost
+            AUTH_MOCKING: disabled
+            AUTH_BASE_URL: http://localhost:3000
+            TENANT_SUBDOMAIN_MOCKING: enabled
+            OBSERVATION_API_MOCKING: disabled
+            GATEWAY_URL: http://server:8080
+            SIGNALING_URL: http://edge-bridge:8787
+            AUTH_DATABASE_URL: postgres://tolo_web:${TOLO_WEB_DB_PASSWORD:-tolo_web}@web-db:5432/tolo_web
+            AUTH_SECRET: ${AUTH_SECRET:-camera-e2e-bff-secret-that-is-long-enough}
+            AUTH_IDP_ISSUER: http://idp:8080
+            AUTH_IDP_CLIENT_ID: console-ui
+            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
+            AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_CONNECTION_REDIRECT_URI: http://localhost:3000/api/auth/connection/callback
+            AUTH_CONNECTION_TTL_SECONDS: "86400"
+            AUTH_IDP_MACHINE_CLIENT_ID: edge-page
+            AUTH_IDP_MACHINE_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_IDP_MACHINE_REDIRECT_URI: http://localhost:3000/api/auth/machine/callback
+            AUTH_RESOURCE_HOST: api.example.com
+            FIREBASE_PROJECT_ID: demo-tolo
+            FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
+            FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+        ports: !override
+            - "3000:3000"
+        networks:
+            - web
+            - idp
+        depends_on: !override
+            server:
+                condition: service_started
+            edge-bridge:
+                condition: service_started
+            idp:
+                condition: service_started
+            web-db:
+                condition: service_healthy
+            web-db-migrate:
+                condition: service_completed_successfully
