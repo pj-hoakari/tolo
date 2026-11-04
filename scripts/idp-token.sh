@@ -48,15 +48,6 @@ trap 'rm -f "${cookies}"' EXIT
 verifier="$(openssl rand 32 | b64url)"
 challenge="$(printf '%s' "${verifier}" | openssl dgst -sha256 -binary | b64url)"
 
-login_status="$(
-    curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' -c "${cookies}" \
-        -H 'Content-Type: application/json' \
-        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg t "${IDP_TENANT_ID}" \
-            '{username: $u, password: $p, tenantId: $t}')" \
-        "${IDP_BASE_URL}/api/login"
-)"
-[ "${login_status}" = "200" ] || die "login failed with HTTP ${login_status}"
-
 location="$(
     curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D - -b "${cookies}" -c "${cookies}" -G \
         --data-urlencode 'response_type=code' \
@@ -66,12 +57,33 @@ location="$(
         --data-urlencode 'state=state' \
         --data-urlencode 'nonce=nonce' \
         --data-urlencode "audience=${IDP_AUDIENCE}" \
+        --data-urlencode "resource=https://${IDP_RESOURCE_HOST}/tenants/${IDP_TENANT_ID}" \
         --data-urlencode "code_challenge=${challenge}" \
         --data-urlencode 'code_challenge_method=S256' \
         "${IDP_BASE_URL}/oauth2/authorize" |
         tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1
 )"
 [ -n "${location}" ] || die 'authorize returned no Location header'
+
+login_challenge="$(printf '%s' "${location}" | sed -n 's/.*[?&]challenge=\([^&]*\).*/\1/p')"
+if [ -n "${login_challenge}" ]; then
+    login_status="$(
+        curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' -b "${cookies}" -c "${cookies}" \
+            -H 'Content-Type: application/json' \
+            --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg c "${login_challenge}" \
+                '{username: $u, password: $p, challenge: $c}')" \
+            "${IDP_BASE_URL}/api/login"
+    )"
+    [ "${login_status}" = "200" ] || die "login failed with HTTP ${login_status}"
+
+    location="$(
+        curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D - -b "${cookies}" -c "${cookies}" -G \
+            --data-urlencode "challenge=${login_challenge}" \
+            "${IDP_BASE_URL}/oauth2/authorize" |
+            tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1
+    )"
+    [ -n "${location}" ] || die 'authorize resume returned no Location header'
+fi
 
 code="$(printf '%s' "${location}" | sed -n 's/.*[?&]code=\([^&]*\).*/\1/p')"
 [ -n "${code}" ] || die "authorize returned no code: ${location}"

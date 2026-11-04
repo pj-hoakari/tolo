@@ -25,6 +25,8 @@ services:
         image: ${TOLO_RELATION_STUB_CAMERA_IMAGE:-tolo-relation-stub:camera-e2e}
         build:
             context: ../tolo-relation-stub
+        environment:
+            RELATION_DATA: /data/relation-camera.json
         ports: !override
             - "127.0.0.1:18181:8080"
 
@@ -39,7 +41,7 @@ services:
                 if [ "$$(psql "$$url" -tAc "SELECT COUNT(*) FROM idp_users WHERE tenant_id = 'tenant-a' AND username = 'user-123'")" = "1" ]; then
                   psql "$$url" --set=ON_ERROR_STOP=1 -c "
                     INSERT INTO idp_users (id, tenant_id, username, password, enabled)
-                    SELECT gen_random_uuid()::text, '0123456789abcdef', username, password, enabled
+                    SELECT '01234567-89ab-cdef-0123-456789abcdef', '0123456789abcdef', username, password, enabled
                     FROM idp_users
                     WHERE tenant_id = 'tenant-a' AND username = 'user-123'
                     ON CONFLICT (tenant_id, username) DO NOTHING;

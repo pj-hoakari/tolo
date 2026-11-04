@@ -24,6 +24,7 @@ IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-${TOLO_IDP_SEED_CLIENT_SECRET:-secret}}"
 IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:13001/api/auth/callback/console-ui}"
 IDP_USERNAME="${IDP_USERNAME:-user-123}"
 IDP_PASSWORD="${IDP_PASSWORD:-password}"
+IDP_RESOURCE_HOST="${IDP_RESOURCE_HOST:-api.example.com}"
 CONNECTION_CLIENT_ID="${CONNECTION_CLIENT_ID:-observation-connection}"
 CONNECTION_REDIRECT_URI="${CONNECTION_REDIRECT_URI:-http://localhost:13000/api/auth/connection/callback}"
 WEB_DB_USER="${WEB_DB_USER:-tolo_web}"
@@ -141,15 +142,68 @@ wait_for_http() {
     die "${label} did not become ready: ${url}"
 }
 
-idp_login() {
-    local cookies="$1"
-    local response
-    response="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' -c "${cookies}" \
+login_challenge_from_location() {
+    printf '%s' "$1" | sed -n 's/.*[?&]challenge=\([^&]*\).*/\1/p'
+}
+
+idp_complete_challenge_with_cookie_file() {
+    local cookies="$1" login_challenge
+    login_challenge="$(login_challenge_from_location "${location}")"
+    [ -n "${login_challenge}" ] || return 0
+
+    call_redirect POST "${IDP_URL}/api/login" \
         -H 'Content-Type: application/json' \
-        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg t "${TENANT_ID}" \
-            '{username: $u, password: $p, tenantId: $t}')" \
-        "${IDP_URL}/api/login")"
-    [ "${response}" = "200" ] || die "IdP login for the connection flow failed with HTTP ${response}"
+        -b "${cookies}" -c "${cookies}" \
+        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg c "${login_challenge}" \
+            '{username: $u, password: $p, challenge: $c}')"
+    expect_status 200 'IdP login'
+
+    call_redirect GET "${IDP_URL}/oauth2/authorize?challenge=${login_challenge}" \
+        -b "${cookies}" -c "${cookies}"
+    expect_status 302 'IdP authorize resume'
+    [ -n "${location}" ] || die 'IdP authorize resume returned no Location'
+}
+
+idp_complete_challenge_with_cookie_header() {
+    local cookies="$1" login_challenge
+    login_challenge="$(login_challenge_from_location "${location}")"
+    [ -n "${login_challenge}" ] || return 0
+
+    machine_cookie_header="$(cookie_header "${cookies}")"
+    call_redirect POST "${IDP_URL}/api/login" \
+        -H 'Content-Type: application/json' \
+        -H "Cookie: ${machine_cookie_header}" \
+        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg c "${login_challenge}" \
+            '{username: $u, password: $p, challenge: $c}')"
+    absorb_cookies "${cookies}"
+    expect_status 200 'IdP login'
+
+    machine_cookie_header="$(cookie_header "${cookies}")"
+    call_redirect GET "${IDP_URL}/oauth2/authorize?challenge=${login_challenge}" \
+        -H "Cookie: ${machine_cookie_header}"
+    absorb_cookies "${cookies}"
+    expect_status 302 'IdP authorize resume'
+    [ -n "${location}" ] || die 'IdP authorize resume returned no Location'
+}
+
+idp_login() {
+    local cookies="$1" verifier challenge
+    verifier="$(openssl rand 32 | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+    challenge="$(printf '%s' "${verifier}" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+
+    call_redirect GET "${IDP_URL}/oauth2/authorize" -b "${cookies}" -c "${cookies}" -G \
+        --data-urlencode 'response_type=code' \
+        --data-urlencode "client_id=${IDP_CLIENT_ID}" \
+        --data-urlencode "redirect_uri=${IDP_REDIRECT_URI}" \
+        --data-urlencode 'scope=openid tenant.read' \
+        --data-urlencode 'state=login' \
+        --data-urlencode 'nonce=login' \
+        --data-urlencode "resource=https://${IDP_RESOURCE_HOST}/tenants/${TENANT_ID}" \
+        --data-urlencode "code_challenge=${challenge}" \
+        --data-urlencode 'code_challenge_method=S256'
+    expect_status 302 'IdP login authorize'
+    [ -n "${location}" ] || die 'IdP login authorize returned no Location'
+    idp_complete_challenge_with_cookie_file "${cookies}"
 }
 
 tenant_web_url() {
@@ -186,15 +240,6 @@ machine_login() {
     local cookies="$1"
     local return_encoded
     return_encoded="$(jq -rn --arg v "/management" '$v|@uri')"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-
-    call_redirect POST "${IDP_URL}/api/login" \
-        -H 'Content-Type: application/json' \
-        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg t "${TENANT_ID}" \
-            '{username: $u, password: $p, tenantId: $t}')" \
-        -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 200 'IdP login for the machine flow'
 
     machine_cookie_header="$(cookie_header "${cookies}")"
     call_redirect GET "${WEB_MACHINE_URL}/auth/login?return=${return_encoded}" \
@@ -215,6 +260,8 @@ machine_login() {
     call_redirect GET "${IDP_URL}${authorize_path}" -H "Cookie: ${machine_cookie_header}"
     absorb_cookies "${cookies}"
     expect_status 302 'IdP login authorize'
+    [ -n "${location}" ] || die 'IdP login authorize returned no Location'
+    idp_complete_challenge_with_cookie_header "${cookies}"
 
     local callback_path callback_url
     callback_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
@@ -254,6 +301,7 @@ machine_authorize_connection() {
     absorb_cookies "${cookies}"
     expect_status 302 'IdP machine connection authorize'
     [ -n "${location}" ] || die 'IdP machine connection authorize returned no Location'
+    idp_complete_challenge_with_cookie_header "${cookies}"
 
     local callback_path callback_url
     callback_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
@@ -288,6 +336,7 @@ machine_start() {
     absorb_cookies "${cookies}"
     expect_status 302 'IdP machine authorize'
     [ -n "${location}" ] || die 'IdP machine authorize returned no Location'
+    idp_complete_challenge_with_cookie_header "${cookies}"
 
     local callback_path callback_url
     callback_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
@@ -339,6 +388,7 @@ authorize_connection() {
     call_redirect GET "${IDP_URL}${authorize_path}" -b "${cookies}" -c "${cookies}"
     expect_status 302 'IdP connection authorize'
     [ -n "${location}" ] || die 'IdP connection authorize returned no Location'
+    idp_complete_challenge_with_cookie_file "${cookies}"
     printf '  IdP authorize redirected to %s\n' "${location}"
 
     local callback_path code state
