@@ -621,7 +621,7 @@ call POST "${WEB_URL}/rpc/signaling/requestCameraConnection" \
         json: { eventId: $e, pageEdgeDeviceId: $p, cameraEdgeId: $c }
     }')"
 expect_status 412 'BFF non-linked camera'
-printf '%s' "${body}" | jq -e '.data.code == "CAMERA_NOT_DELEGATED"' >/dev/null \
+printf '%s' "${body}" | jq -e '.json.data.code == "CAMERA_NOT_DELEGATED"' >/dev/null \
     || die 'non-linked camera did not return CAMERA_NOT_DELEGATED'
 printf '  non-linked camera rejected before Edge Bridge (HTTP %s)\n' "${status}"
 
