@@ -14,18 +14,18 @@ FIRESTORE_URL="${FIRESTORE_URL:-http://localhost:18086}"
 AUTH_URL="${AUTH_URL:-http://localhost:19099}"
 WEB_URL="${WEB_URL:-http://localhost:13000}"
 WEB_HOST="${WEB_HOST:-test.localhost:13000}"
-WEB_MACHINE_URL="${WEB_MACHINE_URL:-http://localhost:3000}"
-WEB_MACHINE_HOST="${WEB_MACHINE_HOST:-test.localhost:3000}"
+WEB_MACHINE_URL="${WEB_MACHINE_URL:-http://localhost:13001}"
+WEB_MACHINE_HOST="${WEB_MACHINE_HOST:-test.localhost:13001}"
 
 TENANT_ID="${TOLO_TENANT_ID:-0123456789abcdef}"
 EVENT_ID="${TOLO_EVENT_ID:-fedcba9876543210}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-console-ui}"
-IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-secret}"
-IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:3000/api/auth/callback/console-ui}"
+IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-${TOLO_IDP_SEED_CLIENT_SECRET:-secret}}"
+IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:13001/api/auth/callback/console-ui}"
 IDP_USERNAME="${IDP_USERNAME:-user-123}"
 IDP_PASSWORD="${IDP_PASSWORD:-password}"
 CONNECTION_CLIENT_ID="${CONNECTION_CLIENT_ID:-observation-connection}"
-CONNECTION_REDIRECT_URI="${CONNECTION_REDIRECT_URI:-http://localhost:3000/api/auth/connection/callback}"
+CONNECTION_REDIRECT_URI="${CONNECTION_REDIRECT_URI:-http://localhost:13000/api/auth/connection/callback}"
 WEB_DB_USER="${WEB_DB_USER:-tolo_web}"
 WEB_DB_NAME="${WEB_DB_NAME:-tolo_web}"
 
@@ -65,7 +65,7 @@ call() {
     shift 2
 
     local response
-    response="$(curl -sS -X "${method}" -w $'\n%{http_code}' "$@" "${url}")" \
+    response="$(curl -sS --connect-timeout 3 --max-time 20 -X "${method}" -w $'\n%{http_code}' "$@" "${url}")" \
         || die "request failed: ${method} ${url}"
 
     status="${response##*$'\n'}"
@@ -77,7 +77,7 @@ call_redirect() {
     local method="$1" url="$2"
     shift 2
     local response
-    response="$(curl -sS -X "${method}" -D - -o /dev/null -w $'\n%{http_code}' "$@" "${url}")" \
+    response="$(curl -sS --connect-timeout 3 --max-time 20 -X "${method}" -D - -o /dev/null -w $'\n%{http_code}' "$@" "${url}")" \
         || die "request failed: ${method} ${url}"
     status="${response##*$'\n'}"
     body=""
@@ -131,8 +131,8 @@ wait_for_http() {
     local url="$1" label="$2" attempts="${3:-60}"
     local attempt code
     for attempt in $(seq 1 "${attempts}"); do
-        code="$(curl -sS -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
-        if [ "${code}" != "000" ] && [ "${code}" -lt 500 ]; then
+        code="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
+        if [ "${code}" -ge 200 ] 2>/dev/null && [ "${code}" -lt 300 ]; then
             printf '  %s ready (HTTP %s)\n' "${label}" "${code}"
             return 0
         fi
@@ -144,7 +144,7 @@ wait_for_http() {
 idp_login() {
     local cookies="$1"
     local response
-    response="$(curl -sS -o /dev/null -w '%{http_code}' -c "${cookies}" \
+    response="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' -c "${cookies}" \
         -H 'Content-Type: application/json' \
         --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg t "${TENANT_ID}" \
             '{username: $u, password: $p, tenantId: $t}')" \
@@ -170,7 +170,7 @@ absorb_cookies() {
     [ -n "${last_headers:-}" ] || return 0
     while IFS= read -r line; do
         line="${line%$'\r'}"
-        case "${line,,}" in
+        case "$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')" in
             set-cookie:*)
                 pair="${line#*: }"
                 pair="${pair%%;*}"
@@ -361,7 +361,7 @@ db_count() {
 wait_for_web() {
     local attempt code
     for attempt in $(seq 1 90); do
-        code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: ${WEB_HOST}" "${WEB_URL}/" 2>/dev/null || true)"
+        code="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' -H "Host: ${WEB_HOST}" "${WEB_URL}/" 2>/dev/null || true)"
         if [ "${code}" != "000" ] && [ "${code}" -lt 500 ]; then
             printf '  web ready (HTTP %s)\n' "${code}"
             return 0
@@ -620,7 +620,9 @@ call POST "${WEB_URL}/rpc/signaling/requestCameraConnection" \
     -d "$(jq -nc --arg e "${EVENT_ID}" --arg p "${page_id}" --arg c "${unlinked_camera_id}" '{
         json: { eventId: $e, pageEdgeDeviceId: $p, cameraEdgeId: $c }
     }')"
-expect_not_status 200 'BFF non-linked camera'
+expect_status 412 'BFF non-linked camera'
+printf '%s' "${body}" | jq -e '.data.code == "CAMERA_NOT_DELEGATED"' >/dev/null \
+    || die 'non-linked camera did not return CAMERA_NOT_DELEGATED'
 printf '  non-linked camera rejected before Edge Bridge (HTTP %s)\n' "${status}"
 
 call GET "${DOCUMENTS}/tenants/${TENANT_ID}/events/${EVENT_ID}/edgeDevices/${unlinked_camera_id}/sessions" \

@@ -49,7 +49,7 @@ verifier="$(openssl rand 32 | b64url)"
 challenge="$(printf '%s' "${verifier}" | openssl dgst -sha256 -binary | b64url)"
 
 login_status="$(
-    curl -sS -o /dev/null -w '%{http_code}' -c "${cookies}" \
+    curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' -c "${cookies}" \
         -H 'Content-Type: application/json' \
         --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg t "${IDP_TENANT_ID}" \
             '{username: $u, password: $p, tenantId: $t}')" \
@@ -58,7 +58,7 @@ login_status="$(
 [ "${login_status}" = "200" ] || die "login failed with HTTP ${login_status}"
 
 location="$(
-    curl -sS -o /dev/null -D - -b "${cookies}" -c "${cookies}" -G \
+    curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D - -b "${cookies}" -c "${cookies}" -G \
         --data-urlencode 'response_type=code' \
         --data-urlencode "client_id=${IDP_CLIENT_ID}" \
         --data-urlencode "redirect_uri=${IDP_REDIRECT_URI}" \
@@ -77,7 +77,7 @@ code="$(printf '%s' "${location}" | sed -n 's/.*[?&]code=\([^&]*\).*/\1/p')"
 [ -n "${code}" ] || die "authorize returned no code: ${location}"
 
 token_response="$(
-    curl -sS -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
+    curl -sS --connect-timeout 3 --max-time 20 -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
         --data-urlencode 'grant_type=authorization_code' \
         --data-urlencode "code=${code}" \
         --data-urlencode "redirect_uri=${IDP_REDIRECT_URI}" \
@@ -90,7 +90,7 @@ access_token="$(printf '%s' "${token_response}" | jq -r '.access_token // empty'
 if [ -n "${IDP_EVENT_ID}" ]; then
     exchange_scope="$(printf '%s\n' ${IDP_SCOPE} | grep -v '^openid$' | tr '\n' ' ' | sed 's/ *$//')"
     exchange_response="$(
-        curl -sS -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
+        curl -sS --connect-timeout 3 --max-time 20 -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
             --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
             --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:access_token' \
             --data-urlencode "subject_token=${access_token}" \

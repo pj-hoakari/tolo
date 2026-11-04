@@ -6,8 +6,11 @@ services:
             dockerfile: Dockerfile
             additional_contexts:
                 observation: ../tolo-observation
+        depends_on:
+            idp-camera-user-seed:
+                condition: service_completed_successfully
         ports: !override
-            - "18090:8080"
+            - "127.0.0.1:18090:8080"
 
     idp:
         image: ${TOLO_IDP_CAMERA_IMAGE:-tolo-idp:camera-e2e}
@@ -16,12 +19,14 @@ services:
         environment:
             SPRING_PROFILES_ACTIVE: dev-jvm
         ports: !override
-            - "18080:8080"
+            - "127.0.0.1:18080:8080"
 
     idp-relation-stub:
         image: ${TOLO_RELATION_STUB_CAMERA_IMAGE:-tolo-relation-stub:camera-e2e}
         build:
             context: ../tolo-relation-stub
+        ports: !override
+            - "127.0.0.1:18181:8080"
 
     idp-camera-user-seed:
         image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
@@ -92,9 +97,9 @@ services:
         build:
             context: ./firebase-emulator
         ports: !override
-            - "18086:8080"
-            - "19099:9099"
-            - "14000:4000"
+            - "127.0.0.1:18086:8080"
+            - "127.0.0.1:19099:9099"
+            - "127.0.0.1:14000:4000"
 
     edge-bridge:
         image: ${TOLO_EDGE_BRIDGE_CAMERA_IMAGE:-tolo-edge-bridge:camera-e2e}
@@ -109,7 +114,7 @@ services:
             CAMERA_CLIENT_ID: esp-camera
             CONNECTION_CLIENT_ID: observation-connection
         ports: !override
-            - "18787:8787"
+            - "127.0.0.1:18787:8787"
 
     web-db:
         image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
@@ -160,19 +165,19 @@ services:
             AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
             AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
             AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
-            AUTH_CONNECTION_REDIRECT_URI: http://localhost:3000/api/auth/connection/callback
+            AUTH_CONNECTION_REDIRECT_URI: http://localhost:13000/api/auth/connection/callback
             AUTH_CONNECTION_TTL_SECONDS: "86400"
             AUTH_RESOURCE_HOST: api.example.com
             FIREBASE_PROJECT_ID: demo-tolo
-            FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
-            FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+            FIRESTORE_EMULATOR_HOST: 127.0.0.1:18086
+            FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:19099
         volumes:
             - type: bind
               source: ../tolo-web/public/models
               target: /app/public/models
               read_only: true
         ports: !override
-            - "13000:3000"
+            - "127.0.0.1:13000:3000"
         depends_on: !override
             server:
                 condition: service_started
@@ -190,7 +195,7 @@ services:
         environment:
             ROOT_DOMAIN: localhost
             AUTH_MOCKING: disabled
-            AUTH_BASE_URL: http://localhost:3000
+            AUTH_BASE_URL: http://localhost:13001
             TENANT_SUBDOMAIN_MOCKING: enabled
             OBSERVATION_API_MOCKING: disabled
             GATEWAY_URL: http://server:8080
@@ -202,17 +207,22 @@ services:
             AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
             AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
             AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
-            AUTH_CONNECTION_REDIRECT_URI: http://localhost:3000/api/auth/connection/callback
+            AUTH_CONNECTION_REDIRECT_URI: http://localhost:13001/api/auth/connection/callback
             AUTH_CONNECTION_TTL_SECONDS: "86400"
             AUTH_IDP_MACHINE_CLIENT_ID: edge-page
             AUTH_IDP_MACHINE_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
-            AUTH_IDP_MACHINE_REDIRECT_URI: http://localhost:3000/api/auth/machine/callback
+            AUTH_IDP_MACHINE_REDIRECT_URI: http://localhost:13001/api/auth/machine/callback
             AUTH_RESOURCE_HOST: api.example.com
             FIREBASE_PROJECT_ID: demo-tolo
-            FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
-            FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+            FIRESTORE_EMULATOR_HOST: 127.0.0.1:18086
+            FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:19099
+        volumes:
+            - type: bind
+              source: ../tolo-web/public/models
+              target: /app/public/models
+              read_only: true
         ports: !override
-            - "3000:3000"
+            - "127.0.0.1:13001:3000"
         networks:
             - web
             - idp
@@ -227,3 +237,13 @@ services:
                 condition: service_healthy
             web-db-migrate:
                 condition: service_completed_successfully
+
+# Keep the camera stack isolated from a normal tolo compose project even
+# though the shared compose file names these resources explicitly.
+networks:
+    idp:
+        name: ${COMPOSE_PROJECT_NAME:-tolo-camera-e2e}-idp
+
+volumes:
+    idp-introspection:
+        name: ${COMPOSE_PROJECT_NAME:-tolo-camera-e2e}-idp-introspection
