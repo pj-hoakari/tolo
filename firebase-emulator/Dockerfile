@@ -1,15 +1,11 @@
-FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS node
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends wget gnupg ca-certificates \
- && mkdir -p /etc/apt/keyrings \
- && wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public \
-      | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg \
- && echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(. /etc/os-release && echo $VERSION_CODENAME) main" \
-      > /etc/apt/sources.list.d/adoptium.list \
- && apt-get update \
- && apt-get install -y --no-install-recommends temurin-21-jre \
- && rm -rf /var/lib/apt/lists/*
+FROM eclipse-temurin:21-jre@sha256:0b99b3376fbb50dbf9c0af8535fdd5b8eb0d3fdfc8b1e4967f383b6919f6901a
+
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+ && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 RUN npm install -g firebase-tools
 

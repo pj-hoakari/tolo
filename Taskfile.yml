@@ -17,8 +17,7 @@ env:
         sh: echo "${TOLO_OWNER_SUB:-user-owner}"
 
 vars:
-    FAKEIDP_IMAGE: tolo-fakeidp:9eb734f
-    FAKEIDP_CONTEXT: https://github.com/pj-hoakari/tolo-service-gateway.git#9eb734f910402fb3c5f74b54789a4ce36393e1cc
+    FAKEIDP_IMAGE: ghcr.io/pj-hoakari/tolo-fakeidp:sha-d892c75
     TOKEN_TTL_SECONDS: "86400"
 
 tasks:
@@ -35,7 +34,7 @@ tasks:
     fakeidp:up:
         desc: Start the fake IdP outside Compose. Run after `task up`.
         cmds:
-            - docker build -q -t {{.FAKEIDP_IMAGE}} --target fakeidp {{.FAKEIDP_CONTEXT}}
+            - docker image inspect {{.FAKEIDP_IMAGE}} >/dev/null 2>&1 || docker pull -q {{.FAKEIDP_IMAGE}}
             - >-
               docker run -d --rm --name tolo-fakeidp
               --network tolo-idp --network-alias fakeidp
@@ -77,8 +76,7 @@ tasks:
             - ./scripts/tenant-subdomain-seed-check.sh
             - ./scripts/graph-authoring-event-check.sh
             - ./scripts/observation-measurement-check.sh
-            - ./scripts/operation-delivery-check.sh
-            - ./scripts/compose-reachability-check.sh
+            - task: e2e:concurrent
             - ./scripts/gateway-log-token-check.sh
 
     camera:e2e:
@@ -96,6 +94,19 @@ tasks:
             COMPOSE_PROJECT_NAME: tolo-camera-e2e
         cmds:
             - docker compose down --remove-orphans {{.CLI_ARGS}}
+
+    e2e:concurrent:
+        internal: true
+        deps:
+            - task: e2e:script
+              vars: { SCRIPT: operation-delivery-check.sh }
+            - task: e2e:script
+              vars: { SCRIPT: compose-reachability-check.sh }
+
+    e2e:script:
+        internal: true
+        cmds:
+            - ./scripts/{{.SCRIPT}}
 
     proposal:
         desc: Report measurements until Flow Control stores a detour proposal.

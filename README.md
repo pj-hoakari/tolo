@@ -52,7 +52,8 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.guest.yml` | Guest Service とその DB・マイグレーション |
 | `compose.rt.yml` | Realtime とその DB・マイグレーション。`compose.edge.yml` の Firebase Emulator を使う |
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
-| `compose.idp.yml` | 実物の IdP（tolo-idp）。`server` はホストの 18090 に移る |
+| `compose.idp.yml` | 実物の IdP（tolo-idp）と ingress（ホストの 80 番）。`compose.tm.yml` が要る。`server` はホストの 18090 に移る |
+| `compose.idp-web.yml` | tolo-web を実物の IdP につなぐ。`compose.web.yml` と `compose.idp.yml` が要る |
 | `compose.camera.yml` | ESP32 カメラの e2e 用。`idp`・`observation`・`edge-bridge`・`web`・`server`・`idp-relation-stub` を手元のリポジトリからビルドし、ホストのポートを既存のスタックと重ならない値にずらす。`compose.tm.yml` と重ねて Tenant Management も起動する |
 | `compose.o11y.yml` | Jaeger |
 
@@ -79,33 +80,41 @@ Notification はまだこの環境に含めておらず、`SendPush` は当面�
 
 | 環境変数 | サービス | 既定 |
 | --- | --- | --- |
-| `TOLO_GATEWAY_IMAGE` | `server` | tolo-service-gateway の固定コミットからビルド |
-| `TOLO_PUSH_RELAY_IMAGE` | `push-relay` | jetstream-http-push の固定コミットからビルド |
-| `TOLO_TM_IMAGE` | `tenant-management` | tolo-tenant-management の固定コミットからビルド |
-| `TOLO_TM_MIGRATE_IMAGE` | `tenant-management-migrate` | tolo-tenant-management の固定コミットからビルド |
-| `TOLO_GA_IMAGE` | `graph-authoring` | tolo-graph-authoring の固定コミットからビルド |
-| `TOLO_GA_MIGRATE_IMAGE` | `graph-authoring-migrate` | tolo-graph-authoring の固定コミットからビルド |
-| `TOLO_OBS_IMAGE` | `observation` | tolo-observation の固定コミットからビルド |
-| `TOLO_OBS_MIGRATE_IMAGE` | `observation-migrate` | tolo-observation の固定コミットからビルド |
-| `TOLO_OP_IMAGE` | `operation` | tolo-operation の固定コミットからビルド |
-| `TOLO_OP_MIGRATE_IMAGE` | `operation-migrate` | tolo-operation の固定コミットからビルド |
-| `TOLO_GUEST_IMAGE` | `guest` | tolo-guest の固定コミットからビルド |
-| `TOLO_GUEST_MIGRATE_IMAGE` | `guest-migrate` | tolo-guest の固定コミットからビルド |
-| `TOLO_RT_IMAGE` | `realtime` | tolo-realtime の固定コミットからビルド |
-| `TOLO_RT_MIGRATE_IMAGE` | `realtime-migrate` | tolo-realtime の固定コミットからビルド |
-| `TOLO_FLOW_IMAGE` | `flow-control` | tolo-flow-control の固定コミットからビルド |
-| `TOLO_EDGE_BRIDGE_IMAGE` | `edge-bridge` | tolo-edge-bridge の固定コミットからビルド |
+| `TOLO_GATEWAY_IMAGE` | `server` | ghcr に公開された tolo-service-gateway のイメージ（タグで固定） |
+| `TOLO_PUSH_RELAY_IMAGE` | `push-relay` | ghcr に公開された jetstream-http-push のイメージ（タグで固定） |
+| `TOLO_TM_IMAGE` | `tenant-management` | ghcr に公開された tolo-tenant-management のイメージ（タグで固定） |
+| `TOLO_TM_MIGRATE_IMAGE` | `tenant-management-migrate` | ghcr に公開された tolo-tenant-management のイメージ（タグで固定） |
+| `TOLO_GA_IMAGE` | `graph-authoring` | ghcr に公開された tolo-graph-authoring のイメージ（タグで固定） |
+| `TOLO_GA_MIGRATE_IMAGE` | `graph-authoring-migrate` | ghcr に公開された tolo-graph-authoring のイメージ（タグで固定） |
+| `TOLO_OBS_IMAGE` | `observation` | ghcr に公開された tolo-observation のイメージ（タグで固定） |
+| `TOLO_OBS_MIGRATE_IMAGE` | `observation-migrate` | ghcr に公開された tolo-observation のイメージ（タグで固定） |
+| `TOLO_OP_IMAGE` | `operation` | ghcr に公開された tolo-operation のイメージ（タグで固定） |
+| `TOLO_OP_MIGRATE_IMAGE` | `operation-migrate` | ghcr に公開された tolo-operation のイメージ（タグで固定） |
+| `TOLO_GUEST_IMAGE` | `guest` | ghcr に公開された tolo-guest のイメージ（タグで固定） |
+| `TOLO_GUEST_MIGRATE_IMAGE` | `guest-migrate` | ghcr に公開された tolo-guest のイメージ（タグで固定） |
+| `TOLO_RT_IMAGE` | `realtime` | ghcr に公開された tolo-realtime のイメージ（タグで固定） |
+| `TOLO_RT_MIGRATE_IMAGE` | `realtime-migrate` | ghcr に公開された tolo-realtime のイメージ（タグで固定） |
+| `TOLO_FLOW_IMAGE` | `flow-control` | ghcr に公開された tolo-flow-control のイメージ（タグで固定） |
+| `TOLO_EDGE_BRIDGE_IMAGE` | `edge-bridge` | ghcr に公開された tolo-edge-bridge のイメージ（タグで固定） |
 | `TOLO_FIREBASE_EMULATOR_IMAGE` | `firebase-emulator` | このリポジトリの `firebase-emulator/` からビルド |
 | `TOLO_WEB_IMAGE` | `web` | tolo-web の固定コミットからビルド |
 | `TOLO_IDP_IMAGE` | `idp`（`compose.idp.yml`） | ghcr の native ビルドの固定した版 |
 
-各サービスは、リリース版のイメージではなく、実装リポジトリの既定ブランチの固定したコミットを git URL のビルドコンテキストにしてビルドする  
-リリースを待たずに、既定ブランチに入った変更どうしの組み合わせを確かめるためである  
-コミットを上げるときは、`compose*.yml` の git URL とタグをそろえて書き換える  
-tolo-idp だけは例外で、ghcr に公開されている native ビルドのイメージを版と digest で固定して使う  
-これらは、既定のタグのイメージが手元にあるとき、または `TOLO_*_IMAGE` が手元のイメージを指すとき、そのイメージをそのまま使う  
-`docker compose up --build`（`task up -- --build`）を実行すると git からビルドし直し、そのタグを上書きする  
+各サービスは、リリースで ghcr に公開されたイメージを `sha-<コミットの先頭 7 桁>` のタグで固定して使う  
+手元にそのタグのイメージがなければ、`docker compose up` が ghcr から取得する（`pull_policy: missing`）  
+バージョンを上げるときは、`compose*.yml` のタグと git URL のコミットをそろえて書き換える  
+tolo-idp は版と digest で固定し、git URL を持たない  
+tolo-web と Firebase Emulator は公開したイメージがないので、ソースからビルドする
+
+git URL のビルドコンテキストは、手元でソースからビルドするためのものである  
+`docker compose up --build`（`task up -- --build`）を実行すると git からビルドし直し、固定したタグを手元のイメージで上書きする  
+ghcr のイメージに戻すときは、`docker image rm` で手元のイメージを消してから `task up` を実行する  
+`TOLO_*_IMAGE` が手元のイメージを指すときは、そのイメージをそのまま使う  
 手元でビルドしたイメージを使うときは `--build` を付けない
+
+E2E（`.github/workflows/e2e.yml`）は、リリース済みのイメージだけで動かす  
+Firebase Emulator だけをビルドしてから `task up -- --no-build` で起動するので、公開されていないタグがあると起動の段階で失敗する  
+E2E のために、リリース前のコミットをソースからビルドすることはしない
 
 ## 固定のテナントとイベント
 
@@ -122,7 +131,7 @@ Web から使うテナントとイベントは固定してある
 seed は何度実行しても同じ結果になる  
 Web の URL のホストにはサブドメインを使い、固定のテナントは `<TOLO_TENANT_SUBDOMAIN>.localhost`（既定は `test.localhost`）で開く  
 サブドメインは Tenant Management が持ち、匿名の `ResolveTenantSubdomain` でテナントの ID に引ける  
-SQL は固定した tolo-tenant-management のコミット（`612260d`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+SQL は固定した tolo-tenant-management のコミット（`a9976bd`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
 
 ## 招待の受諾
 
@@ -140,7 +149,7 @@ tolo-web のモックは、テナントのホストへの要求を `AUTH_MOCK_US
 
 tolo-idp が追いつくまでは、開発用の fake IdP でトークンを発行する  
 fake IdP は暫定なので、Docker Compose には含めず `task fakeidp:up` で手動で起動する  
-`task fakeidp:up` は tolo-service-gateway の固定コミット（`9eb734f`）の `fakeidp` ターゲットをビルドし、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
+`task fakeidp:up` は ghcr に公開された tolo-service-gateway の fake IdP（`tolo-fakeidp:sha-d892c75`）を取得し、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
 ホストからは `http://localhost:8082` で届く  
 失効照会の secret は、`keygen` が書いた名前付きボリューム `tolo-idp-introspection` から読む
 
@@ -211,7 +220,7 @@ BFF に渡す `tenant_access` と `event_access` は、スクリプトが実物�
 | `task camera:down` | カメラ e2e 用のスタックを止める。`task camera:down -- -v` でボリュームも消す |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
-GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.edge.yml` と `compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
+GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
 
 ## ドキュメント
 

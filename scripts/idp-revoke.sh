@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IDP_BASE_URL="${IDP_BASE_URL:-http://localhost:18080}"
+IDP_BASE_URL="${IDP_BASE_URL:-http://auth.tolo.localhost}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-client-123}"
 IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-secret}"
 

@@ -1,11 +1,10 @@
 services:
     server:
         environment:
-            IDP_ISSUER: http://idp:8080
+            IDP_ISSUER: http://auth.tolo.localhost
             IDP_AUDIENCE: backend-api
-            IDP_INTROSPECTION_CLIENT_ID: client-123
+            IDP_INTROSPECTION_CLIENT_ID: service-gateway
             IDP_INTROSPECTION_CLIENT_SECRET_FILE: /etc/tolo/idp-seed/introspection-client-secret
-            IDP_LEGACY_EVENTS_WRITE_SCOPE: ${IDP_LEGACY_EVENTS_WRITE_SCOPE:-}
         ports: !override
             - "18090:8080"
         volumes:
@@ -17,6 +16,19 @@ services:
                 condition: service_completed_successfully
             idp:
                 condition: service_started
+            ingress:
+                condition: service_started
+
+    ingress:
+        image: caddy:2-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+        ports:
+            - "80:80"
+        volumes:
+            - ./config/ingress/Caddyfile:/etc/caddy/Caddyfile:ro
+        networks:
+            idp:
+                aliases:
+                    - auth.tolo.localhost
 
     idp-seed-secret:
         image: alpine/openssl:3.5.8@sha256:3f25da71f70eba788067daac3f3df03bd1de7a7c52ed89fa93b94ad2c92d986b
@@ -28,49 +40,42 @@ services:
               chown 65532:65532 /idp/introspection-client-secret
               chmod 0400 /idp/introspection-client-secret
         environment:
-            SEED_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            SEED_CLIENT_SECRET: ${TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET:-gateway-secret}
         volumes:
             - idp-seed-introspection:/idp
         restart: "no"
 
     idp:
-        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:0.2.0@sha256:11a61ab21867090b4b3b02510e91f80a2058bce37fa0064027ebefa3fe4f9ca4}
+        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:0.4.0@sha256:be918fbd97c1c409140b2185556d07cddbf433eb066c9bc0acabdbfd263da085}
         environment:
+            SPRING_PROFILES_ACTIVE: dev-native
             SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
             SPRING_DATASOURCE_URL: jdbc:postgresql://idp-db:5432/tolo_idp
             SPRING_DATASOURCE_USERNAME: tolo_idp
             SPRING_DATASOURCE_PASSWORD: ${TOLO_IDP_DB_PASSWORD:-tolo_idp}
             SPRING_FLYWAY_LOCATIONS: classpath:db/postgresql
-            TOLO_IDP_ISSUER: http://idp:8080
+            TOLO_IDP_ISSUER: http://auth.tolo.localhost
+            TOLO_IDP_LOGIN_PAGE_URL: http://tolo.localhost/login
+            TOLO_IDP_LOGIN_ERROR_PAGE_URL: http://tolo.localhost/auth/error
+            SPRING_CONFIG_ADDITIONAL_LOCATION: file:/etc/tolo-idp/console-ui.yaml
             TOLO_IDP_RATE_LIMIT_REDIS_URI: redis://idp-redis:6379
-            TOLO_IDP_RELATION_BASE_URL: http://idp-relation-stub:8080
+            TOLO_IDP_RELATION_BASE_URL: http://tenant-management:8080
             TOLO_IDP_SEED_ENABLED: "true"
             TOLO_IDP_SEED_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET: ${TOLO_IDP_SERVICE_GATEWAY_CLIENT_SECRET:-gateway-secret}
+            TOLO_IDP_CONSOLE_UI_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
             TOLO_IDP_JWK_ALLOW_EPHEMERAL: "true"
-        ports:
-            - "18080:8080"
+        volumes:
+            - ./config/idp/console-ui.yaml:/etc/tolo-idp/console-ui.yaml:ro
         networks:
             - idp
             - idp-store
+            - tenant-management
         depends_on:
             idp-db:
                 condition: service_healthy
             idp-redis:
                 condition: service_healthy
-            idp-relation-stub:
-                condition: service_started
-
-    idp-relation-stub:
-        image: ghcr.io/pj-hoakari/tolo-relation-stub:latest@sha256:c65b5602c0f8ff74a2682cedfb84afed040ce25fd46c9a267a2c7d379ed50601
-        environment:
-            RELATION_ADDR: ":8080"
-            RELATION_DATA: ${TOLO_RELATION_DATA:-/data/relation.json}
-        ports:
-            - "18081:8080"
-        volumes:
-            - ./config/idp:/data:ro
-        networks:
-            - idp-store
 
     idp-db:
         image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IDP_BASE_URL="${IDP_BASE_URL:-http://localhost:18080}"
+IDP_BASE_URL="${IDP_BASE_URL:-http://auth.tolo.localhost}"
 IDP_TENANT_ID="${IDP_TENANT_ID:-0123456789abcdef}"
 IDP_SCOPE="${IDP_SCOPE:-openid tenant.read events.read}"
-IDP_USERNAME="${IDP_USERNAME:-user-123}"
+IDP_USERNAME="${IDP_USERNAME:-user-owner}"
 IDP_PASSWORD="${IDP_PASSWORD:-password}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-client-123}"
 IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-secret}"
@@ -12,11 +12,12 @@ IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:8080/login/oauth2/code/cl
 IDP_AUDIENCE="${IDP_AUDIENCE:-backend-api}"
 IDP_EVENT_ID="${IDP_EVENT_ID:-}"
 IDP_RESOURCE_HOST="${IDP_RESOURCE_HOST:-api.example.com}"
+IDP_WEB_ORIGIN="${IDP_WEB_ORIGIN:-http://tolo.localhost}"
 
 usage() {
     cat >&2 <<'EOF'
 usage: idp-token.sh [-u base_url] [-t tenant_id] [-s scope] [-e event_id]
-  -u  IdP base URL            (env IDP_BASE_URL,   default http://localhost:18080)
+  -u  IdP base URL            (env IDP_BASE_URL,   default http://auth.tolo.localhost)
   -t  tenant id               (env IDP_TENANT_ID,  default 0123456789abcdef)
   -s  space separated scopes  (env IDP_SCOPE,      default "openid tenant.read events.read")
   -e  event id                (env IDP_EVENT_ID,   exchanges the token for an event_access token)
@@ -48,8 +49,13 @@ trap 'rm -f "${cookies}"' EXIT
 verifier="$(openssl rand 32 | b64url)"
 challenge="$(printf '%s' "${verifier}" | openssl dgst -sha256 -binary | b64url)"
 
-location="$(
-    curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D - -b "${cookies}" -c "${cookies}" -G \
+location_of() {
+    curl -sS -o /dev/null -D - -b "${cookies}" -c "${cookies}" "$@" |
+        tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1
+}
+
+login_page="$(
+    location_of -G \
         --data-urlencode 'response_type=code' \
         --data-urlencode "client_id=${IDP_CLIENT_ID}" \
         --data-urlencode "redirect_uri=${IDP_REDIRECT_URI}" \
@@ -60,36 +66,29 @@ location="$(
         --data-urlencode "resource=https://${IDP_RESOURCE_HOST}/tenants/${IDP_TENANT_ID}" \
         --data-urlencode "code_challenge=${challenge}" \
         --data-urlencode 'code_challenge_method=S256' \
-        "${IDP_BASE_URL}/oauth2/authorize" |
-        tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1
+        "${IDP_BASE_URL}/oauth2/authorize"
 )"
+login_challenge="$(printf '%s' "${login_page}" | sed -n 's/.*[?&]challenge=\([^&]*\).*/\1/p')"
+[ -n "${login_challenge}" ] || die "authorize returned no login challenge: ${login_page}"
+
+login_status="$(
+    curl -sS -o /dev/null -w '%{http_code}' -b "${cookies}" -c "${cookies}" \
+        -H 'Content-Type: application/json' \
+        -H "Origin: ${IDP_WEB_ORIGIN}" \
+        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg c "${login_challenge}" \
+            '{username: $u, password: $p, challenge: $c}')" \
+        "${IDP_BASE_URL}/api/login"
+)"
+[ "${login_status}" = "200" ] || die "login failed with HTTP ${login_status}"
+
+location="$(location_of -G --data-urlencode "challenge=${login_challenge}" "${IDP_BASE_URL}/oauth2/authorize")"
 [ -n "${location}" ] || die 'authorize returned no Location header'
-
-login_challenge="$(printf '%s' "${location}" | sed -n 's/.*[?&]challenge=\([^&]*\).*/\1/p')"
-if [ -n "${login_challenge}" ]; then
-    login_status="$(
-        curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' -b "${cookies}" -c "${cookies}" \
-            -H 'Content-Type: application/json' \
-            --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg c "${login_challenge}" \
-                '{username: $u, password: $p, challenge: $c}')" \
-            "${IDP_BASE_URL}/api/login"
-    )"
-    [ "${login_status}" = "200" ] || die "login failed with HTTP ${login_status}"
-
-    location="$(
-        curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D - -b "${cookies}" -c "${cookies}" -G \
-            --data-urlencode "challenge=${login_challenge}" \
-            "${IDP_BASE_URL}/oauth2/authorize" |
-            tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }' | tail -1
-    )"
-    [ -n "${location}" ] || die 'authorize resume returned no Location header'
-fi
 
 code="$(printf '%s' "${location}" | sed -n 's/.*[?&]code=\([^&]*\).*/\1/p')"
 [ -n "${code}" ] || die "authorize returned no code: ${location}"
 
 token_response="$(
-    curl -sS --connect-timeout 3 --max-time 20 -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
+    curl -sS -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
         --data-urlencode 'grant_type=authorization_code' \
         --data-urlencode "code=${code}" \
         --data-urlencode "redirect_uri=${IDP_REDIRECT_URI}" \
@@ -102,7 +101,7 @@ access_token="$(printf '%s' "${token_response}" | jq -r '.access_token // empty'
 if [ -n "${IDP_EVENT_ID}" ]; then
     exchange_scope="$(printf '%s\n' ${IDP_SCOPE} | grep -v '^openid$' | tr '\n' ' ' | sed 's/ *$//')"
     exchange_response="$(
-        curl -sS --connect-timeout 3 --max-time 20 -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
+        curl -sS -u "${IDP_CLIENT_ID}:${IDP_CLIENT_SECRET}" \
             --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
             --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:access_token' \
             --data-urlencode "subject_token=${access_token}" \

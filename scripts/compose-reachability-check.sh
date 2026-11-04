@@ -9,6 +9,19 @@ probe_image="$(docker compose config --format json | jq -r '.services.keygen.ima
 running="$(docker compose ps --services --status running)"
 
 failures=0
+probes=()
+containers="$(for svc in ${running}; do
+    cid="$(docker compose ps -q "${svc}")"
+    printf '%s %s %s\n' "${svc}" "${cid}" "$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "${cid}")"
+done)"
+
+cid_of() {
+    printf '%s\n' "${containers}" | awk -v s="$1" '$1 == s { print $2 }'
+}
+
+addrs_of() {
+    printf '%s\n' "${containers}" | awk -v s="$1" '$1 == s { $2 = ""; print }'
+}
 
 is_running() {
     printf '%s\n' "${running}" | grep -qx "$1"
@@ -19,32 +32,32 @@ fail() {
     failures=$((failures + 1))
 }
 
-can_connect() {
-    docker run --rm --network "container:$(docker compose ps -q "$1")" --entrypoint nc "${probe_image}" -z -w 2 "$2" "$3" >/dev/null 2>&1
-}
-
-target_addrs() {
-    printf '%s\n' "$1"
-    docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{"\n"}}{{end}}' "$(docker compose ps -q "$1")" | sed '/^$/d'
-}
-
 expect_reachable() {
-    if can_connect "$1" "$2" "$3"; then
-        printf 'ok: %s -> %s:%s reachable\n' "$1" "$2" "$3"
-    else
-        fail "$1 -> $2:$3 should be reachable"
-    fi
+    probes+=("reachable $1 $(cid_of "$1") $2 $3 $2")
 }
 
 expect_unreachable() {
-    local addr
-    for addr in $(target_addrs "$2"); do
-        if can_connect "$1" "${addr}" "$3"; then
-            fail "$1 -> $2:$3 (${addr}) should be unreachable"
-            return
+    probes+=("unreachable $1 $(cid_of "$1") $2 $3 $(addrs_of "$2")")
+}
+
+probe() {
+    local expect="$1" from="$2" cid="$3" to="$4" port="$5" addr
+    shift 5
+    for addr in "$@"; do
+        if docker run --rm --network "container:${cid}" --entrypoint nc "${probe_image}" -z -w 2 "${addr}" "${port}" >/dev/null 2>&1; then
+            if [ "${expect}" = reachable ]; then
+                printf 'ok: %s -> %s:%s reachable\n' "${from}" "${to}" "${port}"
+                return 0
+            fi
+            printf 'NG: %s -> %s:%s (%s) should be unreachable\n' "${from}" "${to}" "${port}" "${addr}"
+            return 1
         fi
     done
-    printf 'ok: %s -> %s:%s unreachable\n' "$1" "$2" "$3"
+    if [ "${expect}" = reachable ]; then
+        printf 'NG: %s -> %s:%s should be reachable\n' "${from}" "${to}" "${port}"
+        return 1
+    fi
+    printf 'ok: %s -> %s:%s unreachable\n' "${from}" "${to}" "${port}"
 }
 
 backends=''
@@ -97,6 +110,19 @@ done
 
 if is_running realtime && is_running firebase-emulator; then
     expect_reachable realtime firebase-emulator 8080
+fi
+
+export probe_image
+export -f probe
+results="$(printf '%s\n' "${probes[@]}" | xargs -P 16 -L 1 bash -c 'probe "$@"' _ | sort || true)"
+printf '%s\n' "${results}" | grep -v '^NG: ' || true
+ng="$(printf '%s\n' "${results}" | grep '^NG: ' || true)"
+if [ -n "${ng}" ]; then
+    printf '%s\n' "${ng}" >&2
+    failures=$((failures + $(printf '%s\n' "${ng}" | wc -l)))
+fi
+if [ "$(printf '%s\n' "${results}" | grep -cE '^(ok|NG): ')" -ne "${#probes[@]}" ]; then
+    fail "only some of the ${#probes[@]} probes reported a result"
 fi
 
 if [ "${failures}" -ne 0 ]; then

@@ -112,7 +112,16 @@ for procedure in GetCurrentRevision GetObservationPointMappings; do
     [ "${found}" = "200" ] || { printf 'no successful %s from tolo-observation in the gateway audit log\n' "${method}" >&2; exit 1; }
 done
 
-printf '\n# 5. UpdateObservationSettings and GetObservationSettings through the public listener\n'
+printf '\n# 5. GetEventOverview shows the element states that Flow Control returned for the cycle\n'
+read_token="$(token -k event_access -b "${OWNER_SUB}" -t "${tenant_id}" -e "${event_id}" -s 'events.read')"
+call tolo.observation.v1.StatusQueryService/GetEventOverview \
+    "$(jq -nc --arg e "${event_id}" '{eventId: $e}')" \
+    "${read_token}"
+expect 200
+printf '%s' "${body}" | jq -e '[.overview.flowElementStates[]?.targetKey] | index("edge:gate-hall") != null' >/dev/null \
+    || { printf 'GetEventOverview did not return the Flow Control element state of edge:gate-hall\n' >&2; exit 1; }
+
+printf '\n# 6. UpdateObservationSettings and GetObservationSettings through the public listener\n'
 settings_token="$(token -k event_access -b "${OWNER_SUB}" -t "${tenant_id}" -e "${event_id}" -s 'events.read events.manage')"
 call tolo.observation.v1.ObservationSettingsService/UpdateObservationSettings \
     "$(jq -nc --arg e "${event_id}" '{eventId: $e, settings: {historyWindowDays: 14, eventType: "EVENT_TYPE_LONG_TERM"}}')" \
