@@ -53,7 +53,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.rt.yml` | Realtime とその DB・マイグレーション。`compose.edge.yml` の Firebase Emulator を使う |
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
 | `compose.idp.yml` | 実物の IdP（tolo-idp）。`server` はホストの 18090 に移る |
-| `compose.camera.yml` | ESP32 カメラの e2e 用。`idp`・`observation`・`edge-bridge`・`web`・`server`・`idp-relation-stub` を手元のリポジトリからビルドし、ホストのポートを既存のスタックと重ならない値にずらす |
+| `compose.camera.yml` | ESP32 カメラの e2e 用。`idp`・`observation`・`edge-bridge`・`web`・`server`・`idp-relation-stub` を手元のリポジトリからビルドし、ホストのポートを既存のスタックと重ならない値にずらす。`compose.tm.yml` と重ねて Tenant Management も起動する |
 | `compose.o11y.yml` | Jaeger |
 
 `firebase-emulator/firestore.rules` は、Edge Bridge Service のシグナリング文書と Realtime の最終更新 ID 文書（`deliveryNotifications`）のルールを合わせた、本番の Firebase プロジェクトと同じ内容にする  
@@ -160,13 +160,13 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 Gateway も手元の `tolo-service-gateway` から通常の `Dockerfile` でビルドし、追加のビルドコンテキストで手元の `tolo-observation` を渡す。専用の Dockerfile は使わない
 Observation を公開したあとに固定コミットへ戻す手順は、tolo-service-gateway の README にある
 relation stub は、`compose.idp.yml` が固定する版に membership API がないため、手元の `tolo-relation-stub` からビルドする
-Tenant Management・Graph Authoring などは、ほかの compose と同じ固定コミットのイメージを使う
+Tenant Management はほかの compose と同じ固定コミットのイメージを使い、camera e2e でも起動する
 
 ```bash
 task camera:e2e
 ```
 
-`COMPOSE_FILE` は `compose.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml`、プロジェクト名は `tolo-camera-e2e` になる
+`COMPOSE_FILE` は `compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml`、プロジェクト名は `tolo-camera-e2e` になる
 実物の IdP の開発用 seed は `tenant-a` にしかユーザーを作らないため、オーバーレイの `idp-camera-user-seed` が固定テナント `0123456789abcdef` に同じ `user-123` を作る
 
 確認する内容は次のとおりになる

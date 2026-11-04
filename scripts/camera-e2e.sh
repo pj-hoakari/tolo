@@ -5,7 +5,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd -- "${script_dir}/.." && pwd)"
 
 PROJECT="${COMPOSE_PROJECT_NAME:-tolo-camera-e2e}"
-COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml}"
 
 IDP_URL="${IDP_URL:-http://localhost:18080}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:18090}"
@@ -210,6 +210,10 @@ tenant_web_url() {
     printf '%s%s' "${WEB_MACHINE_URL}" "$(printf '%s' "$1" | sed -E 's#^[a-z]+://[^/]+##')"
 }
 
+idp_web_url() {
+    printf '%s%s' "${IDP_URL}" "$(printf '%s' "$1" | sed -E 's#^[a-z]+://[^/]+##')"
+}
+
 cookie_header() {
     local dir="$1" file out=''
     for file in "${dir}"/*; do
@@ -354,9 +358,16 @@ machine_start() {
     call_redirect GET "${handoff_url}" -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
     absorb_cookies "${cookies}"
     expect_status 302 'BFF machine handoff'
-    [ "${location}" = "${return_path}" ] \
-        || die "machine handoff landed on ${location}, want ${return_path}"
-    printf '  machine session handed to the observation page\n'
+    [ -n "${location}" ] || die 'BFF machine handoff returned no Location'
+    printf '%s' "${location}" | grep -q '/connect/logout' \
+        || die "machine handoff did not redirect to IdP logout: ${location}"
+    local logout_url
+    logout_url="$(idp_web_url "${location}")"
+    machine_cookie_header="$(cookie_header "${cookies}")"
+    call_redirect GET "${logout_url}" -H "Cookie: ${machine_cookie_header}"
+    absorb_cookies "${cookies}"
+    expect_status 302 'IdP machine logout'
+    printf '  machine session created and IdP logout requested\n'
 }
 
 machine_rpc() {
@@ -453,11 +464,11 @@ printf 'camera-e2e: compose=%s\n' "${COMPOSE_FILE}"
 
 step '0. start the camera stack (fresh volumes)'
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-compose build server idp idp-relation-stub observation observation-migrate firebase-emulator edge-bridge
+compose build server idp idp-relation-stub observation observation-migrate firebase-emulator edge-bridge tenant-management tenant-management-migrate
 compose up -d --wait \
     keygen server nats idp idp-db idp-redis idp-relation-stub idp-seed-secret \
     idp-camera-user-seed observation-db observation-migrate observation \
-    firebase-emulator edge-bridge web-db
+    firebase-emulator edge-bridge web-db tenant-management
 
 wait_for_http "${IDP_URL}/oauth2/jwks" 'idp'
 wait_for_http "${GATEWAY_URL}/readyz" 'service gateway'
