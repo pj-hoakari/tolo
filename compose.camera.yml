@@ -9,6 +9,8 @@ services:
         depends_on:
             idp-camera-user-seed:
                 condition: service_completed_successfully
+        environment:
+            IDP_ISSUER: http://idp:8080
         ports: !override
             - "127.0.0.1:18090:8080"
 
@@ -18,6 +20,11 @@ services:
             context: ../tolo-idp
         environment:
             SPRING_PROFILES_ACTIVE: dev-jvm
+            TOLO_IDP_ISSUER: http://idp:8080
+            TOLO_IDP_RELATION_BASE_URL: http://idp-relation-stub:8080
+            SPRING_CONFIG_ADDITIONAL_LOCATION: file:/etc/tolo-idp/console-ui.yaml,file:/etc/tolo-idp/console-ui-camera.yaml
+        volumes:
+            - ./config/idp/console-ui-camera.yaml:/etc/tolo-idp/console-ui-camera.yaml:ro
         ports: !override
             - "127.0.0.1:18080:8080"
 
@@ -27,6 +34,10 @@ services:
             context: ../tolo-relation-stub
         environment:
             RELATION_DATA: /data/relation-camera.json
+        volumes:
+            - ./config/idp:/data:ro
+        networks:
+            - idp
         ports: !override
             - "127.0.0.1:18181:8080"
 
@@ -164,7 +175,7 @@ services:
             AUTH_SECRET: ${AUTH_SECRET:-camera-e2e-bff-secret-that-is-long-enough}
             AUTH_IDP_ISSUER: http://idp:8080
             AUTH_IDP_CLIENT_ID: console-ui
-            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
             AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
             AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
             AUTH_CONNECTION_REDIRECT_URI: http://localhost:13000/api/auth/connection/callback
@@ -206,7 +217,7 @@ services:
             AUTH_SECRET: ${AUTH_SECRET:-camera-e2e-bff-secret-that-is-long-enough}
             AUTH_IDP_ISSUER: http://idp:8080
             AUTH_IDP_CLIENT_ID: console-ui
-            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
             AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
             AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
             AUTH_CONNECTION_REDIRECT_URI: http://localhost:13001/api/auth/connection/callback

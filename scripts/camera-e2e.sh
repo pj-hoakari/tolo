@@ -20,8 +20,8 @@ WEB_MACHINE_HOST="${WEB_MACHINE_HOST:-test.localhost:13001}"
 TENANT_ID="${TOLO_TENANT_ID:-0123456789abcdef}"
 EVENT_ID="${TOLO_EVENT_ID:-fedcba9876543210}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-console-ui}"
-IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-${TOLO_IDP_SEED_CLIENT_SECRET:-secret}}"
-IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://127.0.0.1:13001/api/auth/callback/console-ui}"
+IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}}"
+IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://tolo.localhost/api/auth/callback/tolo-idp}"
 IDP_USERNAME="${IDP_USERNAME:-user-123}"
 IDP_PASSWORD="${IDP_PASSWORD:-password}"
 IDP_RESOURCE_HOST="${IDP_RESOURCE_HOST:-api.example.com}"
@@ -438,6 +438,8 @@ idp_token() {
     IDP_CLIENT_ID="${IDP_CLIENT_ID}" \
     IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET}" \
     IDP_REDIRECT_URI="${IDP_REDIRECT_URI}" \
+    IDP_USERNAME="${IDP_USERNAME}" \
+    IDP_PASSWORD="${IDP_PASSWORD}" \
         "${script_dir}/idp-token.sh" "$@"
 }
 
