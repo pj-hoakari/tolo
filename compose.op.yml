@@ -25,7 +25,7 @@ services:
             - operation
 
     operation:
-        image: ${TOLO_OP_IMAGE:-ghcr.io/pj-hoakari/tolo-operation:sha-57b04d5}
+        image: ${TOLO_OP_IMAGE:-ghcr.io/pj-hoakari/tolo-operation:sha-0a21a87}
         pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-operation.git#57b04d521763c32ca877c324c85a5864280203f6
@@ -50,7 +50,7 @@ services:
                 condition: service_started
 
     operation-migrate:
-        image: ${TOLO_OP_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-operation-migrate:sha-57b04d5}
+        image: ${TOLO_OP_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-operation-migrate:sha-0a21a87}
         pull_policy: missing
         build:
             context: https://github.com/pj-hoakari/tolo-operation.git#57b04d521763c32ca877c324c85a5864280203f6
