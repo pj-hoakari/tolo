@@ -34,7 +34,7 @@ PostgreSQL のパスワードは `TOLO_OBS_DB_PASSWORD` で変えられる（既
 続けて端末を登録し、その端末として `Heartbeat` と `ReportMeasurements` を呼ぶ  
 Gateway の監査ログを `docker compose logs` で読み、Observation からの GraphSupply 呼び出しが成功したことを確かめる  
 続けて `event_access` トークン（scope `events.read events.manage`）で `UpdateObservationSettings` と `GetObservationSettings` を公開用 listener 越しに呼び、保存した設定値が返ることを確かめる  
-最後に観測点を 4 つ持つ端末を登録し、2 つずつ `gate-hall` と `outside-gate` に紐づけて公開し直す。`gate-hall` の 2 つには今の窓の計測を、`outside-gate` には 1 つに今の窓の計測、もう 1 つに 5 分前に止まった計測を送る。`GetEventOverview` の観測スナップショットで、`gate-hall` が 2 つの平均になり、`outside-gate` が止まった観測点を除いた値で欠測にならないことを確かめる（hoakari-root ADR-0134）  
+最後に観測点を 4 つ持つ端末を登録し、2 つずつルート `gate-hall` とポイント `hall` に紐づけて公開し直す。`gate-hall` の 2 つには今の窓の計測を、`hall` には 1 つに今の窓の計測、もう 1 つに 5 分前に止まった計測を送る。`GetEventOverview` の観測スナップショットで、`gate-hall` が 2 つの平均になり、`hall` が止まった観測点を除いた値で欠測にならないことを確かめる（hoakari-root ADR-0134）  
 想定と違うステータスが返った段階で失敗する
 
 監査ログを読むため、compose の指定は環境変数で渡す
@@ -54,6 +54,6 @@ COMPOSE_PROJECT_NAME=toloobscheck COMPOSE_FILE=compose.yml:compose.tm.yml:compos
 | `GetObservationSettings` | `200`。`historyWindowDays` が `14`、`eventType` が `EVENT_TYPE_LONG_TERM` |
 | 4 つの観測点の `ReportMeasurements` | `200`。`acceptedCount` が `4` |
 | `GetEventOverview` の `gate-hall` | 流量 `12`（6 と 18 人/分の平均）、停滞量スコア `2`（1 と 3 人の平均） |
-| `GetEventOverview` の `outside-gate` | 流量 `10`、停滞量スコア `2`（止まった観測点を除いた 1 つの値） |
+| `GetEventOverview` の `hall` | 人数スコア `2`（止まった観測点を除いた 1 つの値） |
 
 この確認は GitHub Actions の `E2E` でも、Graph Authoring の確認の後に走る

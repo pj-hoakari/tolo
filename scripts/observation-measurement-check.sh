@@ -136,16 +136,17 @@ printf '%s' "${body}" | jq -e '.settings.historyWindowDays == 14 and .settings.e
 
 printf '\n# 7. Observation averages the points of one route and leaves out a point that stopped reporting\n'
 call tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice \
-    "$(jq -nc --arg e "${event_id}" '{eventId: $e, name: "gate-pair", observationPointNames: ["gate-a", "gate-b", "exit-a", "exit-b"]}')" \
+    "$(jq -nc --arg e "${event_id}" '{eventId: $e, name: "gate-pair", observationPointNames: ["gate-a", "gate-b", "hall-a", "hall-b"]}')" \
     "${manage_token}"
 expect 200
 pair_device_id="$(printf '%s' "${body}" | jq -r '.device.edgeDeviceId')"
 pair_points="$(printf '%s' "${body}" | jq -c '[.device.observationPoints[] | {key: .name, value: .observationPointId}] | from_entries')"
 pair_point() { printf '%s' "${pair_points}" | jq -r --arg n "$1" '.[$n]'; }
 
-for pair in gate-a:gate-hall gate-b:gate-hall exit-a:outside-gate exit-b:outside-gate; do
+for pair in gate-a:routeId:gate-hall gate-b:routeId:gate-hall hall-a:pointId:hall hall-b:pointId:hall; do
+    IFS=: read -r name kind target <<<"${pair}"
     call tolo.graph.v1.GraphAuthoringService/MapObservationPoint \
-        "$(jq -nc --arg e "${event_id}" --arg p "$(pair_point "${pair%%:*}")" --arg r "${pair##*:}" '{eventId: $e, mapping: {observationPointId: $p, anchor: {routeId: $r}}}')" \
+        "$(jq -nc --arg e "${event_id}" --arg p "$(pair_point "${name}")" --arg k "${kind}" --arg t "${target}" '{eventId: $e, mapping: {observationPointId: $p, anchor: {($k): $t}}}')" \
         "${manage_token}"
     expect 200
 done
@@ -167,24 +168,25 @@ call tolo.observation.v1.MeasurementIngestService/ReportMeasurements \
         --arg s "${half_minute_ago}" --arg t "${now}" --arg os "${stopped_start}" --arg ot "${stopped_end}" '{eventId: $e, edgeDeviceId: $d, measurements: [
             {observationPointId: $p["gate-a"], windowStart: $s, windowEnd: $t, countIn: 3, countOut: 0, meanDetectedPeople: 1, source: "MEASUREMENT_SOURCE_EDGE"},
             {observationPointId: $p["gate-b"], windowStart: $s, windowEnd: $t, countIn: 9, countOut: 0, meanDetectedPeople: 3, source: "MEASUREMENT_SOURCE_EDGE"},
-            {observationPointId: $p["exit-a"], windowStart: $s, windowEnd: $t, countIn: 5, countOut: 0, meanDetectedPeople: 2, source: "MEASUREMENT_SOURCE_EDGE"},
-            {observationPointId: $p["exit-b"], windowStart: $os, windowEnd: $ot, countIn: 9, countOut: 0, meanDetectedPeople: 4, source: "MEASUREMENT_SOURCE_EDGE"}
+            {observationPointId: $p["hall-a"], windowStart: $s, windowEnd: $t, countIn: 5, countOut: 0, meanDetectedPeople: 2, source: "MEASUREMENT_SOURCE_EDGE"},
+            {observationPointId: $p["hall-b"], windowStart: $os, windowEnd: $ot, countIn: 9, countOut: 0, meanDetectedPeople: 4, source: "MEASUREMENT_SOURCE_EDGE"}
         ]}')" \
     "${report_token}"
 expect 200
 printf '%s' "${body}" | jq -e '.acceptedCount == 4' >/dev/null \
     || { printf 'ReportMeasurements did not accept the four measurements of gate-pair\n' >&2; exit 1; }
 
-composed='.overview.snapshot.routeScores // [] | map({key: .routeId, value: {forward: .directionalFlow.forward, stagnation: .stagnationScore}}) | from_entries'
-want='{"gate-hall": {"forward": 12, "stagnation": 2}, "outside-gate": {"forward": 10, "stagnation": 2}}'
+composed='{"gate-hall": (.overview.snapshot.routeScores // [] | map(select(.routeId == "gate-hall") | {forward: .directionalFlow.forward, stagnation: .stagnationScore}) | first),
+    "hall": (.overview.snapshot.pointScores // [] | map(select(.pointId == "hall") | {people: .peopleScore}) | first)}'
+want='{"gate-hall": {"forward": 12, "stagnation": 2}, "hall": {"people": 2}}'
 for _ in $(seq 1 30); do
     call tolo.observation.v1.StatusQueryService/GetEventOverview "$(jq -nc --arg e "${event_id}" '{eventId: $e}')" "${read_token}"
     expect 200
-    got="$(printf '%s' "${body}" | jq -c "${composed} | {\"gate-hall\": .[\"gate-hall\"], \"outside-gate\": .[\"outside-gate\"]}")"
+    got="$(printf '%s' "${body}" | jq -c "${composed}")"
     [ "$(jq -n --argjson g "${got}" --argjson w "${want}" '$g == $w')" = true ] && break
     sleep 1
 done
 [ "$(jq -n --argjson g "${got}" --argjson w "${want}" '$g == $w')" = true ] \
-    || { printf 'GetEventOverview route scores = %s, want gate-hall averaged over gate-a and gate-b and outside-gate from exit-a alone: %s\n' "${got}" "${want}" >&2; exit 1; }
+    || { printf 'GetEventOverview route scores = %s, want gate-hall averaged over gate-a and gate-b and hall from hall-a alone: %s\n' "${got}" "${want}" >&2; exit 1; }
 
 printf '\nall steps behaved as expected (tenant_id=%s event_id=%s edge_device_id=%s)\n' "${tenant_id}" "${event_id}" "${device_id}"
