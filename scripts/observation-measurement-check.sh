@@ -99,7 +99,7 @@ window_end="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 window_start="$(date -u -d '-30 seconds' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-30S +%Y-%m-%dT%H:%M:%SZ)"
 call tolo.observation.v1.MeasurementIngestService/ReportMeasurements \
     "$(jq -nc --arg e "${event_id}" --arg d "${device_id}" --arg p "${point_id}" --arg s "${window_start}" --arg t "${window_end}" \
-        '{eventId: $e, edgeDeviceId: $d, measurements: [{observationPointId: $p, windowStart: $s, windowEnd: $t, countIn: 3, countOut: 1, source: "MEASUREMENT_SOURCE_EDGE"}]}')" \
+        '{eventId: $e, edgeDeviceId: $d, measurements: [{observationPointId: $p, windowStart: $s, windowEnd: $t, countIn: 3, countOut: 1, meanDetectedPeople: 1.5, source: "MEASUREMENT_SOURCE_EDGE"}]}')" \
     "${report_token}"
 expect 200
 
