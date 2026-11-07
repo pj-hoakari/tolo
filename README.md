@@ -54,6 +54,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
 | `compose.idp.yml` | 実物の IdP（tolo-idp）と ingress（ホストの 80 番）。`compose.tm.yml` が要る。`server` はホストの 18090 に移る |
 | `compose.idp-web.yml` | tolo-web を実物の IdP につなぐ。`compose.web.yml` と `compose.idp.yml` が要る |
+| `compose.camera.yml` | ESP32 カメラの e2e 用。`compose.idp.yml`・`compose.idp-web.yml` にカメラ client と web の設定を足す |
 | `compose.o11y.yml` | Jaeger |
 
 `firebase-emulator/firestore.rules` は、Edge Bridge Service のシグナリング文書と Realtime の最終更新 ID 文書（`deliveryNotifications`）のルールを合わせた、本番の Firebase プロジェクトと同じ内容にする  
@@ -161,6 +162,69 @@ fake IdP は起動のたびに署名鍵を作り直す
 fake IdP を起動し直したら、`task tokens` でトークンを発行し直し、`.env` を書き換えて `task up` を実行する  
 Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、新しいトークンが通るまで最大 5 分かかることがある
 
+## ESP32 カメラの e2e
+
+`task camera:e2e` は、ESP32 の実機を使わずに、カメラのデバイス認可から signaling の接続までを通しで確かめる
+`compose.idp.yml`・`compose.idp-web.yml`・`compose.tm.yml` を使い、実物の IdP・Tenant Management・認証 DB の上に `compose.camera.yml` を重ねる
+`compose.camera.yml` が足すのは、カメラ client（`esp-camera`・`observation-connection`）と web の設定だけになる
+
+```bash
+task down
+task fakeidp:down
+task camera:e2e
+```
+
+実物の IdP は ingress の 80 番と、固定名のネットワーク `tolo-idp` を使う
+メインの `tolo` スタックと fake IdP が動いていると衝突するため、先に止める
+
+カメラ用のイメージは `TOLO_*_IMAGE` で渡す。設定していない場合は、このリポジトリの兄弟ディレクトリ（`../tolo-*`）からビルドする
+
+| 環境変数 | 既定のビルド元 |
+| --- | --- |
+| `TOLO_GATEWAY_IMAGE` | `../tolo-service-gateway` |
+| `TOLO_IDP_IMAGE` | `../tolo-idp` |
+| `TOLO_OBS_IMAGE` | `../tolo-observation` |
+| `TOLO_OBS_MIGRATE_IMAGE` | `../tolo-observation`（`migrate` target） |
+| `TOLO_EDGE_BRIDGE_IMAGE` | `../tolo-edge-bridge` |
+| `TOLO_WEB_IMAGE` | `../tolo-web` |
+| `TOLO_FIREBASE_EMULATOR_IMAGE` | `./firebase-emulator` |
+
+`tolo-web` は、削除済みの `vendor/` をコピーしない Dockerfile であること
+
+`COMPOSE_FILE` は `compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml:compose.camera.yml`、プロジェクト名は `tolo-camera-e2e` になる
+実物の IdP の開発用 seed は `tenant-a` にしかユーザーを作らないため、スクリプトが `idp-signup.sh` で固定テナント `0123456789abcdef` の `user-owner` を作り、返った `sub` で `tenant-management-seed` を入れ直す
+
+確認する内容は次のとおりになる
+
+1. 実物の IdP から、スタッフの `tenant_access` と `event_access` を Authorization Code + PKCE + Token Exchange で取る
+2. Observation に観測ページ端末と観測点を登録し、`kind=CAMERA` の端末を観測点に紐づける。カメラが観測点を持たず、`ListEdgeDevices` が紐づけを返すことを確かめる
+3. `esp-camera` の Device Authorization を開始して `authorization_pending` を確かめ、IdP の BFF エンドポイントで承認する。得た `event_access` が `events.stream` と `edge_device_id` を持つことを確かめる
+4. カメラのトークンで Edge Bridge の `IssueFirestoreToken` を呼び、カスタムトークンに `edge_device_id` があり `session_id` がないことを確かめる
+5. tolo-web の `signaling.requestCameraConnection` を呼び、返るカスタムトークンがカメラの `edge_device_id` とセッションに束縛されていることを確かめる。紐づけのないカメラは Edge Bridge に届く前に拒否される
+6. Firebase Auth と Firestore のエミュレータで、カメラと接続用のトークンが一致するパスを読み書きできることを確かめる
+7. IdP でデバイス認可を失効させ、カメラの Refresh Token が `invalid_grant` になることを確かめる
+
+Firestore のパス束縛ルール（`edge_device_id` / `session_id` と文書パスの照合）は、この E2E とは別に扱う
+観測ページのマシンセッションは tolo-web 側の E2E で扱い、このスクリプトには含めない
+
+スタックは終了時に `docker compose down -v` で消える
+残して調べたいときは `KEEP_STACK=1 task camera:e2e` を使い、あとから `task camera:down -- -v` で消す
+失敗した要求の本文は、既定ではトークンを含みうるため出さない。`CAMERA_E2E_DEBUG=1` を付けたときだけ表示する
+
+ホストのポートは次の値を使う
+
+| サービス | URL |
+| --- | --- |
+| IdP | `http://auth.tolo.localhost` |
+| Service Gateway | `http://localhost:18090` |
+| Edge Bridge | `http://localhost:8787` |
+| Firestore エミュレータ | `http://localhost:8081` |
+| Firebase Auth エミュレータ | `http://localhost:9099` |
+| tolo-web | `http://test.localhost:13000` |
+
+`tolo-web` は BFF のセッションだけをモックし、下流の Observation・Edge Bridge は実物を呼ぶ
+BFF に渡す `tenant_access` と `event_access` は、スクリプトが実物の IdP から取って環境変数で渡す
+
 ## タスク
 
 | タスク | 内容 |
@@ -171,6 +235,8 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 | `task fakeidp:down` | fake IdP を止める。発行したトークンは使えなくなる |
 | `task tokens` | Web 用のトークンを `.env` の行の形で出力する |
 | `task e2e` | オンボーディング・招待の受諾・固定テナントのサブドメイン・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
+| `task camera:e2e` | ESP32 カメラのデバイス認可から signaling の接続までを、実物の IdP・Tenant Management・認証 DB・Observation・Edge Bridge・Web BFF で確認する |
+| `task camera:down` | カメラ e2e 用のスタックを止める。`task camera:down -- -v` でボリュームも消す |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
 GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する

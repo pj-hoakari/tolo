@@ -79,6 +79,22 @@ tasks:
             - task: e2e:concurrent
             - ./scripts/gateway-log-token-check.sh
 
+    camera:e2e:
+        desc: Run the ESP32 camera authorization e2e on the real-IdP stack. Build camera images per TOLO_*_IMAGE.
+        env:
+            COMPOSE_FILE: compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml:compose.camera.yml
+            COMPOSE_PROJECT_NAME: tolo-camera-e2e
+        cmds:
+            - ./scripts/camera-e2e.sh
+
+    camera:down:
+        desc: Stop the camera e2e stack. Pass -- -v to also delete the volumes.
+        env:
+            COMPOSE_FILE: compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml:compose.camera.yml
+            COMPOSE_PROJECT_NAME: tolo-camera-e2e
+        cmds:
+            - docker compose down --remove-orphans {{.CLI_ARGS}}
+
     e2e:concurrent:
         internal: true
         deps:

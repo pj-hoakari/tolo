@@ -1,0 +1,42 @@
+# Camera-specific overlay for the real-IdP stack.
+#
+# Use with:
+#   compose.yml, compose.tm.yml, compose.idp.yml, compose.idp-web.yml,
+#   compose.obs.yml, compose.edge.yml, compose.web.yml
+#
+# Build the camera service images from the feature branches and pass them as
+# TOLO_*_IMAGE (see scripts/camera-e2e.sh). The base compose files keep the
+# normal build contexts and image defaults.
+services:
+    idp:
+        environment:
+            # The locally built tolo-idp image is the JVM runtime.
+            SPRING_PROFILES_ACTIVE: dev-jvm
+
+    edge-bridge:
+        environment:
+            CAMERA_CLIENT_ID: esp-camera
+            CONNECTION_CLIENT_ID: observation-connection
+
+    web:
+        environment:
+            ROOT_DOMAIN: localhost
+            AUTH_MOCKING: enabled
+            AUTH_MOCK_USER_ID: ${TOLO_OWNER_SUB:-user-owner}
+            TENANT_SUBDOMAIN_MOCKING: enabled
+            OBSERVATION_API_MOCKING: disabled
+            GATEWAY_URL: http://server:8080
+            SIGNALING_URL: http://edge-bridge:8787
+            TENANT_ACCESS_TOKEN: ${TENANT_ACCESS_TOKEN:-}
+            GRAPH_ACCESS_TOKEN: ${GRAPH_ACCESS_TOKEN:-}
+            OBSERVATION_ACCESS_TOKEN: ${OBSERVATION_ACCESS_TOKEN:-}
+            AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
+            AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_CONNECTION_REDIRECT_URI: http://localhost:13000/api/auth/connection/callback
+            AUTH_CONNECTION_TTL_SECONDS: "86400"
+            AUTH_RESOURCE_HOST: api.example.com
+            FIREBASE_PROJECT_ID: demo-tolo
+            FIRESTORE_EMULATOR_HOST: 127.0.0.1:8081
+            FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+        ports: !override
+            - "127.0.0.1:13000:3000"
