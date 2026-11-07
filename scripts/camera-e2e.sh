@@ -7,6 +7,36 @@ repo_dir="$(cd -- "${script_dir}/.." && pwd)"
 PROJECT="${COMPOSE_PROJECT_NAME:-tolo-camera-e2e}"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml}"
 
+if [ -n "${TOLO_REPOS_ROOT:-}" ]; then
+    case "${TOLO_REPOS_ROOT}" in
+        /*) repos_root="${TOLO_REPOS_ROOT}" ;;
+        *) repos_root="${repo_dir}/${TOLO_REPOS_ROOT}" ;;
+    esac
+    if [ ! -d "${repos_root}" ]; then
+        printf 'camera-e2e: TOLO_REPOS_ROOT not found: %s\n' "${TOLO_REPOS_ROOT}" >&2
+        exit 1
+    fi
+    repos_root="$(cd -- "${repos_root}" && pwd)"
+
+    set_local_source() {
+        local variable="$1" directory="$2"
+        if [ -z "${!variable:-}" ]; then
+            if [ ! -d "${repos_root}/${directory}" ]; then
+                printf 'camera-e2e: %s not found under TOLO_REPOS_ROOT=%s\n' "${directory}" "${repos_root}" >&2
+                exit 1
+            fi
+            export "${variable}=$(cd -- "${repos_root}/${directory}" && pwd)"
+        fi
+    }
+
+    set_local_source TOLO_GATEWAY_SOURCE tolo-service-gateway
+    set_local_source TOLO_IDP_SOURCE tolo-idp
+    set_local_source TOLO_RELATION_STUB_SOURCE tolo-relation-stub
+    set_local_source TOLO_OBS_SOURCE tolo-observation
+    set_local_source TOLO_EDGE_BRIDGE_SOURCE tolo-edge-bridge
+    set_local_source TOLO_WEB_SOURCE tolo-web
+fi
+
 IDP_URL="${IDP_URL:-http://localhost:18080}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:18090}"
 BRIDGE_URL="${BRIDGE_URL:-http://localhost:18787}"

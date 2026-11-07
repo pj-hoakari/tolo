@@ -80,7 +80,7 @@ tasks:
             - ./scripts/gateway-log-token-check.sh
 
     camera:e2e:
-        desc: Run the ESP32 camera authorization and connection e2e in Docker with local service builds.
+        desc: Run the ESP32 camera authorization and connection e2e in Docker. Set TOLO_REPOS_ROOT to build local checkouts.
         env:
             COMPOSE_FILE: compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml
             COMPOSE_PROJECT_NAME: tolo-camera-e2e

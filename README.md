@@ -165,14 +165,23 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 ## ESP32 カメラの e2e
 
 `task camera:e2e` は、ESP32 の実機を使わずに、カメラのデバイス認可から signaling の接続までを通しで確かめる
-`compose.camera.yml` を重ね、`tolo-idp`・`tolo-observation`・`tolo-edge-bridge`・`tolo-web` を手元のリポジトリからビルドする
-Gateway も手元の `tolo-service-gateway` から通常の `Dockerfile` でビルドする。Observation のカメラ対応版は Gateway の `go.mod` が固定する
-relation stub は、`compose.idp.yml` が固定する版に membership API がないため、手元の `tolo-relation-stub` からビルドする
+`compose.camera.yml` を重ね、`tolo-idp`・`tolo-observation`・`tolo-edge-bridge`・`tolo-web` をビルドする
+既定ではカメラ対応ブランチの固定コミットをリモートからビルドする。手元の変更を試すときは `TOLO_REPOS_ROOT` を各リポジトリの親ディレクトリに向ける
+Gateway も `tolo-service-gateway` をビルドし、Observation のカメラ対応版は Gateway の `go.mod` が固定する
+relation stub は、`compose.idp.yml` が固定する版に membership API がないため、`tolo-relation-stub` の `main` を固定してビルドする
 Tenant Management はほかの compose と同じ固定コミットのイメージを使い、camera e2e でも起動する
 
 ```bash
 task camera:e2e
 ```
+
+手元のリポジトリの変更を使う場合は、親ディレクトリを渡す
+
+```bash
+TOLO_REPOS_ROOT=.. task camera:e2e
+```
+
+`TOLO_GATEWAY_SOURCE`・`TOLO_IDP_SOURCE`・`TOLO_OBS_SOURCE`・`TOLO_EDGE_BRIDGE_SOURCE`・`TOLO_WEB_SOURCE`・`TOLO_RELATION_STUB_SOURCE` で個別に指定することもできる
 
 `COMPOSE_FILE` は `compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml`、プロジェクト名は `tolo-camera-e2e` になる
 実物の IdP の開発用 seed は `tenant-a` にしかユーザーを作らないため、オーバーレイの `idp-camera-user-seed` が固定テナント `0123456789abcdef` に同じ `user-123` を作る

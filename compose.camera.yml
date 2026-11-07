@@ -1,8 +1,10 @@
+# The default build contexts pin the camera branches. Set TOLO_REPOS_ROOT to
+# the directory that contains the checkouts to build local sources instead.
 services:
     server:
         image: ${TOLO_GATEWAY_CAMERA_IMAGE:-tolo-service-gateway:camera-e2e}
         build:
-            context: ../tolo-service-gateway
+            context: ${TOLO_GATEWAY_SOURCE:-https://github.com/pj-hoakari/tolo-service-gateway.git#25b1a5da305b23271103a1292e3ab5afabdc41eb}
             dockerfile: Dockerfile
         depends_on:
             idp-camera-user-seed:
@@ -15,7 +17,7 @@ services:
     idp:
         image: ${TOLO_IDP_CAMERA_IMAGE:-tolo-idp:camera-e2e}
         build:
-            context: ../tolo-idp
+            context: ${TOLO_IDP_SOURCE:-https://github.com/pj-hoakari/tolo-idp.git#30e91d9ccb04642cbdc342be656eea2776d2c2b0}
         environment:
             SPRING_PROFILES_ACTIVE: dev-jvm
             TOLO_IDP_ISSUER: http://idp:8080
@@ -29,7 +31,7 @@ services:
     idp-relation-stub:
         image: ${TOLO_RELATION_STUB_CAMERA_IMAGE:-tolo-relation-stub:camera-e2e}
         build:
-            context: ../tolo-relation-stub
+            context: ${TOLO_RELATION_STUB_SOURCE:-https://github.com/pj-hoakari/tolo-relation-stub.git#f1357b2e7f770c4a571720faeb1e0cf82c3b4737}
         environment:
             RELATION_DATA: /data/relation-camera.json
         volumes:
@@ -88,7 +90,7 @@ services:
     observation:
         image: ${TOLO_OBS_CAMERA_IMAGE:-tolo-observation:camera-e2e}
         build:
-            context: ../tolo-observation
+            context: ${TOLO_OBS_SOURCE:-https://github.com/pj-hoakari/tolo-observation.git#fc949562623911764c312237f3097bca78ae6f79}
         depends_on: !override
             observation-migrate:
                 condition: service_completed_successfully
@@ -100,7 +102,7 @@ services:
     observation-migrate:
         image: ${TOLO_OBS_MIGRATE_CAMERA_IMAGE:-tolo-observation-migrate:camera-e2e}
         build:
-            context: ../tolo-observation
+            context: ${TOLO_OBS_SOURCE:-https://github.com/pj-hoakari/tolo-observation.git#fc949562623911764c312237f3097bca78ae6f79}
             target: migrate
 
     firebase-emulator:
@@ -115,7 +117,7 @@ services:
     edge-bridge:
         image: ${TOLO_EDGE_BRIDGE_CAMERA_IMAGE:-tolo-edge-bridge:camera-e2e}
         build:
-            context: ../tolo-edge-bridge
+            context: ${TOLO_EDGE_BRIDGE_SOURCE:-https://github.com/pj-hoakari/tolo-edge-bridge.git#e2af557cf677a1116ef65fc6370a21f36f785c0d}
         environment:
             IDP_ISSUER: http://idp:8080
             IDP_AUDIENCE: backend-api
@@ -157,7 +159,7 @@ services:
     web:
         image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
         build:
-            context: ../tolo-web
+            context: ${TOLO_WEB_SOURCE:-https://github.com/pj-hoakari/tolo-web.git#037379b05728e80ac9ee7022b06779da18eb6f7e}
         environment:
             ROOT_DOMAIN: localhost
             AUTH_MOCKING: enabled
