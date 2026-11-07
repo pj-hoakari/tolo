@@ -159,7 +159,7 @@ services:
     web:
         image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
         build:
-            context: ${TOLO_WEB_SOURCE:-https://github.com/pj-hoakari/tolo-web.git#037379b05728e80ac9ee7022b06779da18eb6f7e}
+            context: ${TOLO_WEB_SOURCE:-https://github.com/pj-hoakari/tolo-web.git#c22c3f0f44d25ceb90d2de67a4f1f1b964cdbd91}
         environment:
             ROOT_DOMAIN: localhost
             AUTH_MOCKING: enabled
