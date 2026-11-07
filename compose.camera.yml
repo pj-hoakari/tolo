@@ -4,8 +4,6 @@ services:
         build:
             context: ../tolo-service-gateway
             dockerfile: Dockerfile
-            additional_contexts:
-                observation: ../tolo-observation
         depends_on:
             idp-camera-user-seed:
                 condition: service_completed_successfully
