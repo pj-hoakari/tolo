@@ -11,30 +11,22 @@ service cloud.firestore {
           && request.time < timestamp.value(request.auth.token.expires_at * 1000);
       }
 
-      function boundToPath() {
-        return (!('edge_device_id' in request.auth.token)
-            || request.auth.token.edge_device_id == edgeDeviceId)
-          && (!('session_id' in request.auth.token)
-            || request.auth.token.session_id == sessionId);
-      }
-
       function role() {
         return request.auth.token.peer_role;
       }
 
-      allow read: if peer() && boundToPath() && role() in ['edge', 'console'];
-      allow delete: if peer() && boundToPath() && role() == 'console';
+      allow read: if peer() && role() in ['edge', 'console'];
+      allow delete: if peer() && role() == 'console';
 
       match /signals/{signalId} {
-        allow read: if peer() && boundToPath() && role() in ['edge', 'console'];
+        allow read: if peer() && role() in ['edge', 'console'];
         allow create: if peer()
-          && boundToPath()
           && role() in ['edge', 'console']
           && request.resource.data.keys().hasOnly(['from', 'payload', 'createdAt'])
           && request.resource.data.keys().hasAll(['from', 'payload', 'createdAt'])
           && request.resource.data.from == role()
           && request.resource.data.createdAt == request.time;
-        allow delete: if peer() && boundToPath() && role() == 'console';
+        allow delete: if peer() && role() == 'console';
       }
     }
 

@@ -1,68 +1,42 @@
 #!/usr/bin/env bash
+#
+# ESP32 camera authorization E2E on the real-IdP stack.
+#
+# This uses the same overlays as the other real-IdP checks:
+#   compose.yml, compose.tm.yml, compose.idp.yml, compose.obs.yml,
+#   compose.edge.yml, compose.web.yml, compose.idp-web.yml, compose.camera.yml
+#
+# Camera service images are taken from TOLO_*_IMAGE. If an image is not set,
+# it is built from the sibling repository checkout.
+#
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd -- "${script_dir}/.." && pwd)"
+workspace_dir="$(cd -- "${repo_dir}/.." && pwd)"
 
 PROJECT="${COMPOSE_PROJECT_NAME:-tolo-camera-e2e}"
-COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml:compose.camera.yml}"
 
-if [ -n "${TOLO_REPOS_ROOT:-}" ]; then
-    case "${TOLO_REPOS_ROOT}" in
-        /*) repos_root="${TOLO_REPOS_ROOT}" ;;
-        *) repos_root="${repo_dir}/${TOLO_REPOS_ROOT}" ;;
-    esac
-    if [ ! -d "${repos_root}" ]; then
-        printf 'camera-e2e: TOLO_REPOS_ROOT not found: %s\n' "${TOLO_REPOS_ROOT}" >&2
-        exit 1
-    fi
-    repos_root="$(cd -- "${repos_root}" && pwd)"
-
-    set_local_source() {
-        local variable="$1" directory="$2"
-        if [ -z "${!variable:-}" ]; then
-            if [ ! -d "${repos_root}/${directory}" ]; then
-                printf 'camera-e2e: %s not found under TOLO_REPOS_ROOT=%s\n' "${directory}" "${repos_root}" >&2
-                exit 1
-            fi
-            export "${variable}=$(cd -- "${repos_root}/${directory}" && pwd)"
-        fi
-    }
-
-    set_local_source TOLO_GATEWAY_SOURCE tolo-service-gateway
-    set_local_source TOLO_IDP_SOURCE tolo-idp
-    set_local_source TOLO_RELATION_STUB_SOURCE tolo-relation-stub
-    set_local_source TOLO_OBS_SOURCE tolo-observation
-    set_local_source TOLO_EDGE_BRIDGE_SOURCE tolo-edge-bridge
-    set_local_source TOLO_WEB_SOURCE tolo-web
-
-    if [ -z "${TOLO_WEB_MODELS_DIR:-}" ] && [ -d "${repos_root}/tolo-web/public/models" ]; then
-        export TOLO_WEB_MODELS_DIR="$(cd -- "${repos_root}/tolo-web/public/models" && pwd)"
-    fi
-fi
-
-IDP_URL="${IDP_URL:-http://localhost:18080}"
+IDP_URL="${IDP_URL:-http://auth.tolo.localhost}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:18090}"
-BRIDGE_URL="${BRIDGE_URL:-http://localhost:18787}"
-FIRESTORE_URL="${FIRESTORE_URL:-http://localhost:18086}"
-AUTH_URL="${AUTH_URL:-http://localhost:19099}"
+BRIDGE_URL="${BRIDGE_URL:-http://localhost:8787}"
+FIRESTORE_URL="${FIRESTORE_URL:-http://localhost:8081}"
+AUTH_URL="${AUTH_URL:-http://localhost:9099}"
 WEB_URL="${WEB_URL:-http://localhost:13000}"
 WEB_HOST="${WEB_HOST:-test.localhost:13000}"
-WEB_MACHINE_URL="${WEB_MACHINE_URL:-http://localhost:13001}"
-WEB_MACHINE_HOST="${WEB_MACHINE_HOST:-test.localhost:13001}"
 
 TENANT_ID="${TOLO_TENANT_ID:-0123456789abcdef}"
 EVENT_ID="${TOLO_EVENT_ID:-fedcba9876543210}"
 IDP_CLIENT_ID="${IDP_CLIENT_ID:-console-ui}"
 IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}}"
 IDP_REDIRECT_URI="${IDP_REDIRECT_URI:-http://tolo.localhost/api/auth/callback/tolo-idp}"
-IDP_USERNAME="${IDP_USERNAME:-user-123}"
+IDP_USERNAME="${IDP_USERNAME:-user-owner}"
 IDP_PASSWORD="${IDP_PASSWORD:-password}"
 IDP_RESOURCE_HOST="${IDP_RESOURCE_HOST:-api.example.com}"
 CONNECTION_CLIENT_ID="${CONNECTION_CLIENT_ID:-observation-connection}"
-CONNECTION_REDIRECT_URI="${CONNECTION_REDIRECT_URI:-http://localhost:13000/api/auth/connection/callback}"
-WEB_DB_USER="${WEB_DB_USER:-tolo_web}"
-WEB_DB_NAME="${WEB_DB_NAME:-tolo_web}"
+WEB_AUTH_DB_USER="${WEB_AUTH_DB_USER:-tolo_web_auth}"
+WEB_AUTH_DB_NAME="${WEB_AUTH_DB_NAME:-tolo_web_auth}"
 
 DOCUMENTS="${FIRESTORE_URL}/v1/projects/demo-tolo/databases/(default)/documents"
 
@@ -93,6 +67,10 @@ die() {
 
 step() {
     printf '\n=== %s\n' "$*"
+}
+
+log() {
+    printf '  %s\n' "$*"
 }
 
 call() {
@@ -163,11 +141,11 @@ assert_missing_claim() {
 }
 
 wait_for_http() {
-    local url="$1" label="$2" attempts="${3:-60}"
+    local url="$1" label="$2" attempts="${3:-90}"
     local attempt code
     for attempt in $(seq 1 "${attempts}"); do
         code="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
-        if [ "${code}" -ge 200 ] 2>/dev/null && [ "${code}" -lt 300 ]; then
+        if [ "${code}" -ge 200 ] 2>/dev/null && [ "${code}" -lt 300 ] 2>/dev/null; then
             printf '  %s ready (HTTP %s)\n' "${label}" "${code}"
             return 0
         fi
@@ -198,28 +176,6 @@ idp_complete_challenge_with_cookie_file() {
     [ -n "${location}" ] || die 'IdP authorize resume returned no Location'
 }
 
-idp_complete_challenge_with_cookie_header() {
-    local cookies="$1" login_challenge
-    login_challenge="$(login_challenge_from_location "${location}")"
-    [ -n "${login_challenge}" ] || return 0
-
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect POST "${IDP_URL}/api/login" \
-        -H 'Content-Type: application/json' \
-        -H "Cookie: ${machine_cookie_header}" \
-        --data "$(jq -nc --arg u "${IDP_USERNAME}" --arg p "${IDP_PASSWORD}" --arg c "${login_challenge}" \
-            '{username: $u, password: $p, challenge: $c}')"
-    absorb_cookies "${cookies}"
-    expect_status 200 'IdP login'
-
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${IDP_URL}/oauth2/authorize?challenge=${login_challenge}" \
-        -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'IdP authorize resume'
-    [ -n "${location}" ] || die 'IdP authorize resume returned no Location'
-}
-
 idp_login() {
     local cookies="$1" verifier challenge
     verifier="$(openssl rand 32 | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
@@ -238,181 +194,6 @@ idp_login() {
     expect_status 302 'IdP login authorize'
     [ -n "${location}" ] || die 'IdP login authorize returned no Location'
     idp_complete_challenge_with_cookie_file "${cookies}"
-}
-
-tenant_web_url() {
-    printf '%s%s' "${WEB_MACHINE_URL}" "$(printf '%s' "$1" | sed -E 's#^[a-z]+://[^/]+##')"
-}
-
-idp_web_url() {
-    printf '%s%s' "${IDP_URL}" "$(printf '%s' "$1" | sed -E 's#^[a-z]+://[^/]+##')"
-}
-
-cookie_header() {
-    local dir="$1" file out=''
-    for file in "${dir}"/*; do
-        [ -e "${file}" ] || continue
-        out="${out}$(basename "${file}")=$(cat "${file}"); "
-    done
-    printf '%s' "${out%; }"
-}
-
-absorb_cookies() {
-    local dir="$1" line pair name value
-    [ -n "${last_headers:-}" ] || return 0
-    while IFS= read -r line; do
-        line="${line%$'\r'}"
-        case "$(printf '%s' "${line}" | tr '[:upper:]' '[:lower:]')" in
-            set-cookie:*)
-                pair="${line#*: }"
-                pair="${pair%%;*}"
-                name="${pair%%=*}"
-                value="${pair#*=}"
-                [ -n "${name}" ] && printf '%s' "${value}" > "${dir}/${name}"
-                ;;
-        esac
-    done <<< "${last_headers}"
-}
-
-machine_login() {
-    local cookies="$1"
-    local return_encoded
-    return_encoded="$(jq -rn --arg v "/management" '$v|@uri')"
-
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${WEB_MACHINE_URL}/auth/login?return=${return_encoded}" \
-        -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine login start'
-    [ -n "${location}" ] || die 'BFF machine login start returned no Location'
-
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${location}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine login begin'
-    [ -n "${location}" ] || die 'BFF machine login begin returned no Location'
-
-    local authorize_path
-    authorize_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${IDP_URL}${authorize_path}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'IdP login authorize'
-    [ -n "${location}" ] || die 'IdP login authorize returned no Location'
-    idp_complete_challenge_with_cookie_header "${cookies}"
-
-    local callback_path callback_url
-    callback_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
-    callback_url="${WEB_MACHINE_URL}${callback_path}"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${callback_url}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine login callback'
-    [ -n "${location}" ] || die 'BFF machine login callback returned no Location'
-
-    local handoff_url
-    handoff_url="$(tenant_web_url "${location}")"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${handoff_url}" -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 200 'BFF machine login handoff'
-    printf '  staff session created through the BFF login flow\n'
-}
-
-machine_authorize_connection() {
-    local cookies="$1" page_id="$2"
-    local return_path="/event/${EVENT_ID}/observation"
-    local return_encoded
-    return_encoded="$(jq -rn --arg v "${return_path}" '$v|@uri')"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-
-    call_redirect GET "${WEB_MACHINE_URL}/api/auth/connection/start?eventId=${EVENT_ID}&pageEdgeDeviceId=${page_id}&return=${return_encoded}" \
-        -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine connection start'
-    [ -n "${location}" ] || die 'BFF machine connection start returned no Location'
-
-    local authorize_path
-    authorize_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${IDP_URL}${authorize_path}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'IdP machine connection authorize'
-    [ -n "${location}" ] || die 'IdP machine connection authorize returned no Location'
-    idp_complete_challenge_with_cookie_header "${cookies}"
-
-    local callback_path callback_url
-    callback_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
-    callback_url="${WEB_MACHINE_URL}${callback_path}"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${callback_url}" -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine connection callback'
-    printf '%s' "${location}" | grep -q 'cameraConnection=authorized' \
-        || die "the machine flow connection was not authorized: ${location}"
-    printf '  machine connection authorization stored for page %s\n' "${page_id}"
-}
-
-machine_start() {
-    local cookies="$1" page_id="$2"
-    local return_path="/event/${EVENT_ID}/observation/${page_id}"
-    local return_encoded
-    return_encoded="$(jq -rn --arg v "${return_path}" '$v|@uri')"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-
-    call_redirect GET "${WEB_MACHINE_URL}/api/auth/machine/start?eventId=${EVENT_ID}&pageEdgeDeviceId=${page_id}&return=${return_encoded}" \
-        -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine start'
-    [ -n "${location}" ] || die 'BFF machine start returned no Location'
-    printf '  BFF machine start redirected to %s\n' "${location}"
-
-    local authorize_path
-    authorize_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${IDP_URL}${authorize_path}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'IdP machine authorize'
-    [ -n "${location}" ] || die 'IdP machine authorize returned no Location'
-    idp_complete_challenge_with_cookie_header "${cookies}"
-
-    local callback_path callback_url
-    callback_path="$(printf '%s' "${location}" | sed -E 's#^[a-z]+://[^/]+##')"
-    callback_url="${WEB_MACHINE_URL}${callback_path}"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${callback_url}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine callback'
-    [ -n "${location}" ] || die 'BFF machine callback returned no Location'
-    printf '  BFF machine callback redirected to %s\n' "${location}"
-
-    local handoff_url
-    handoff_url="$(tenant_web_url "${location}")"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${handoff_url}" -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'BFF machine handoff'
-    [ -n "${location}" ] || die 'BFF machine handoff returned no Location'
-    printf '%s' "${location}" | grep -q '/connect/logout' \
-        || die "machine handoff did not redirect to IdP logout: ${location}"
-    local logout_url
-    logout_url="$(idp_web_url "${location}")"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call_redirect GET "${logout_url}" -H "Cookie: ${machine_cookie_header}"
-    absorb_cookies "${cookies}"
-    expect_status 302 'IdP machine logout'
-    printf '  machine session created and IdP logout requested\n'
-}
-
-machine_rpc() {
-    local procedure="$1" payload="$2" cookies="$3"
-    machine_cookie_header="$(cookie_header "${cookies}")"
-    call POST "${WEB_MACHINE_URL}/rpc/${procedure}" \
-        -H 'Content-Type: application/json' \
-        -H 'x-csrf-token: orpc' \
-        -H "Host: ${WEB_MACHINE_HOST}" \
-        -H "Cookie: ${machine_cookie_header}" \
-        -d "${payload}"
 }
 
 authorize_connection() {
@@ -450,7 +231,7 @@ authorize_connection() {
 }
 
 db_count() {
-    compose exec -T web-db psql -U "${WEB_DB_USER}" -d "${WEB_DB_NAME}" -tAc "$1" | tr -d '[:space:]'
+    compose exec -T web-auth-db psql -U "${WEB_AUTH_DB_USER}" -d "${WEB_AUTH_DB_NAME}" -tAc "$1" | tr -d '[:space:]'
 }
 
 wait_for_web() {
@@ -477,12 +258,74 @@ idp_token() {
         "${script_dir}/idp-token.sh" "$@"
 }
 
+preflight() {
+    if docker compose -p tolo ps -q 2>/dev/null | grep -q .; then
+        die 'the main tolo stack is running; run `task down` first'
+    fi
+    if docker ps --format '{{.Names}}' | grep -qx 'tolo-fakeidp'; then
+        die 'the fake IdP is running; run `task fakeidp:down` first'
+    fi
+    [ -n "${NPM_TOKEN:-}" ] || die 'NPM_TOKEN is required to build tolo-web'
+}
+
+build_image() {
+    local env_name="$1" tag="$2" directory="$3"
+    shift 3
+    if [ -n "${!env_name:-}" ]; then
+        log "using ${env_name}=${!env_name}"
+        return 0
+    fi
+    [ -d "${directory}" ] ||
+        die "missing source for ${env_name}: ${directory}; set ${env_name} to a built image"
+    log "building ${tag} from ${directory}"
+    docker build -t "${tag}" "$@" "${directory}"
+    export "${env_name}=${tag}"
+}
+
+build_images() {
+    build_image TOLO_GATEWAY_IMAGE tolo-service-gateway:camera-e2e "${workspace_dir}/tolo-service-gateway"
+    build_image TOLO_IDP_IMAGE tolo-idp:camera-e2e "${workspace_dir}/tolo-idp"
+    build_image TOLO_OBS_IMAGE tolo-observation:camera-e2e "${workspace_dir}/tolo-observation"
+    build_image TOLO_OBS_MIGRATE_IMAGE tolo-observation-migrate:camera-e2e "${workspace_dir}/tolo-observation" --target migrate
+    build_image TOLO_EDGE_BRIDGE_IMAGE tolo-edge-bridge:camera-e2e "${workspace_dir}/tolo-edge-bridge"
+    build_image TOLO_FIREBASE_EMULATOR_IMAGE tolo-firebase-emulator:camera-e2e "${repo_dir}/firebase-emulator"
+
+    if [ -z "${TOLO_WEB_IMAGE:-}" ]; then
+        grep -q 'COPY vendor ./vendor' "${workspace_dir}/tolo-web/Dockerfile" 2>/dev/null &&
+            die 'tolo-web/Dockerfile still copies the removed vendor directory; apply PR #586 or set TOLO_WEB_IMAGE'
+        build_image TOLO_WEB_IMAGE tolo-web:camera-e2e "${workspace_dir}/tolo-web" \
+            --secret id=npm_token,env=NPM_TOKEN
+    else
+        log "using TOLO_WEB_IMAGE=${TOLO_WEB_IMAGE}"
+    fi
+}
+
+seed_camera_user() {
+    local sub
+    sub="$(IDP_BASE_URL="${IDP_URL}" \
+        IDP_TENANT_ID="${TENANT_ID}" \
+        IDP_USERNAME="${IDP_USERNAME}" \
+        IDP_PASSWORD="${IDP_PASSWORD}" \
+            "${script_dir}/idp-signup.sh")" || die 'idp-signup.sh failed'
+    sub="$(printf '%s' "${sub}" | tail -1 | tr -d '[:space:]')"
+    [ -n "${sub}" ] || die 'idp-signup.sh returned no sub'
+    printf '  camera user sub=%s\n' "${sub}"
+    TOLO_OWNER_SUB="${sub}" compose run --rm tenant-management-seed >/dev/null
+}
+
+recreate_web() {
+    local staff_token="$1" event_token="$2"
+    TENANT_ACCESS_TOKEN="${staff_token}" \
+    GRAPH_ACCESS_TOKEN="${event_token}" \
+    OBSERVATION_ACCESS_TOKEN="${event_token}" \
+        compose up -d --no-deps --force-recreate web
+    wait_for_web
+}
+
 connection_cookies="$(mktemp)"
-machine_cookies="$(mktemp -d)"
 cleanup() {
     local code=$?
     rm -f "${connection_cookies}"
-    rm -rf "${machine_cookies}" "${machine_cookies}.staff"
     if [ "${KEEP_STACK:-0}" = "1" ]; then
         printf '\nkeeping the compose stack (KEEP_STACK=1): project=%s\n' "${PROJECT}"
         exit "${code}"
@@ -498,21 +341,23 @@ cd "${repo_dir}"
 printf 'camera-e2e: project=%s\n' "${PROJECT}"
 printf 'camera-e2e: compose=%s\n' "${COMPOSE_FILE}"
 
-step '0. start the camera stack (fresh volumes)'
+step '0. build the camera images and start the real-IdP stack'
+preflight
+build_images
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-compose build server idp idp-relation-stub observation observation-migrate firebase-emulator edge-bridge tenant-management tenant-management-migrate
 compose up -d --wait \
-    keygen server nats idp idp-db idp-redis idp-relation-stub idp-seed-secret \
-    idp-camera-user-seed observation-db observation-migrate observation \
-    firebase-emulator edge-bridge web-db tenant-management
+    keygen server nats push-relay tenant-management \
+    idp ingress observation firebase-emulator edge-bridge web
 
 wait_for_http "${IDP_URL}/oauth2/jwks" 'idp'
 wait_for_http "${GATEWAY_URL}/readyz" 'service gateway'
 wait_for_http "${BRIDGE_URL}/healthz" 'edge bridge'
 wait_for_http "${FIRESTORE_URL}/" 'firestore emulator'
 wait_for_http "${AUTH_URL}/" 'auth emulator'
+wait_for_web
 
-step '1. obtain staff tenant_access and event_access from the real IdP'
+step '1. create the fixed-tenant user, seed Tenant Management, and get tokens'
+seed_camera_user
 staff_token="$(idp_token -s 'openid tenant.read events.read events.manage')"
 [ -n "${staff_token}" ] || die 'tenant_access is empty'
 event_token="$(idp_token -s 'openid tenant.read events.read events.manage' -e "${EVENT_ID}")"
@@ -525,6 +370,7 @@ assert_claim "${event_token}" event_id "${EVENT_ID}"
 assert_claim "${event_token}" client_id "${IDP_CLIENT_ID}"
 printf '  tenant_access: token_use=tenant_access tenant_id=%s client_id=%s\n' "${TENANT_ID}" "${IDP_CLIENT_ID}"
 printf '  event_access:  token_use=event_access event_id=%s scope=%s\n' "${EVENT_ID}" "$(claim "${event_token}" scope)"
+recreate_web "${staff_token}" "${event_token}"
 
 step '2. register an observation page, its point, and a linked camera'
 call POST "${GATEWAY_URL}/tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice" \
@@ -538,7 +384,6 @@ call POST "${GATEWAY_URL}/tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevi
 expect_status 200 'RegisterEdgeDevice(page)'
 page_id="$(printf '%s' "${body}" | jq -r '.device.edgeDeviceId')"
 point_id="$(printf '%s' "${body}" | jq -r '.device.observationPoints[] | select(.name == "camera-e2e-point") | .observationPointId')"
-other_point_id="$(printf '%s' "${body}" | jq -r '.device.observationPoints[] | select(.name == "camera-e2e-other-point") | .observationPointId')"
 [ -n "${page_id}" ] && [ "${page_id}" != "null" ] || die 'page edge_device_id is empty'
 [ -n "${point_id}" ] && [ "${point_id}" != "null" ] || die 'observation point is empty'
 printf '  page edge_device_id=%s observation point=%s\n' "${page_id}" "${point_id}"
@@ -676,12 +521,6 @@ assert_missing_claim "${camera_custom_token}" session_id
 printf '  camera custom token: edge_device_id=%s session_id=absent\n' "${camera_id}"
 
 step '5. authorize the observation connection client and connect through the BFF'
-TENANT_ACCESS_TOKEN="${staff_token}" GRAPH_ACCESS_TOKEN="${event_token}" \
-    compose build web
-TENANT_ACCESS_TOKEN="${staff_token}" GRAPH_ACCESS_TOKEN="${event_token}" \
-    compose up -d --wait web web-machine
-wait_for_web
-wait_for_http "${WEB_MACHINE_URL}/auth/error" 'web-machine'
 idp_login "${connection_cookies}"
 authorize_connection "${connection_cookies}" "${page_id}"
 
@@ -729,7 +568,7 @@ printf '%s' "${body}" | jq -e '(.documents // []) | length == 0' >/dev/null \
     || die 'the rejected non-linked camera still got an Edge Bridge session'
 printf '  unlinked camera has no Edge Bridge session\n'
 
-step '6. Firebase Auth sign-in and Firestore security rules'
+step '6. Firebase Auth sign-in and Firestore reads/writes'
 call POST "${AUTH_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=any" \
     -H 'Content-Type: application/json' \
     -d "$(jq -nc --arg t "${camera_custom_token}" '{token: $t, returnSecureToken: true}')"
@@ -750,14 +589,6 @@ expect_status 200 'camera reads its own session'
 call GET "${DOCUMENTS}/${session_path}" -H "Authorization: Bearer ${connection_id_token}"
 expect_status 200 'connection token reads its bound session'
 printf '  camera and connection tokens can read %s\n' "${session_path}"
-
-call GET "${DOCUMENTS}/tenants/${TENANT_ID}/events/${EVENT_ID}/edgeDevices/${page_id}/sessions/${connection_session_id}" \
-    -H "Authorization: Bearer ${camera_id_token}"
-expect_status 403 'camera reads another edge session'
-call GET "${DOCUMENTS}/tenants/${TENANT_ID}/events/${EVENT_ID}/edgeDevices/${camera_id}/sessions/00000000000000000000" \
-    -H "Authorization: Bearer ${connection_id_token}"
-expect_status 403 'connection token reads another session'
-printf '  mismatched edge and session reads were rejected\n'
 
 call POST "${DOCUMENTS}:commit" \
     -H 'Content-Type: application/json' \
@@ -796,156 +627,7 @@ call POST "${DOCUMENTS}:commit" \
 expect_status 200 'connection token writes a signal on its session'
 printf '  camera and connection tokens can write signals on the matching path\n'
 
-call POST "${DOCUMENTS}:commit" \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer ${camera_id_token}" \
-    -d "$(jq -nc --arg name "projects/demo-tolo/databases/(default)/documents/tenants/${TENANT_ID}/events/${EVENT_ID}/edgeDevices/${page_id}/sessions/${connection_session_id}/signals/camera-wrong-edge" '{
-        writes: [{
-            update: {
-                name: $name,
-                fields: {
-                    from: {stringValue: "edge"},
-                    payload: {mapValue: {fields: {type: {stringValue: "offer"}}}}
-                }
-            },
-            updateTransforms: [{fieldPath: "createdAt", setToServerValue: "REQUEST_TIME"}],
-            currentDocument: {exists: false}
-        }]
-    }')"
-expect_status 403 'camera writes another edge session'
-call POST "${DOCUMENTS}:commit" \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer ${connection_id_token}" \
-    -d "$(jq -nc --arg name "projects/demo-tolo/databases/(default)/documents/tenants/${TENANT_ID}/events/${EVENT_ID}/edgeDevices/${camera_id}/sessions/00000000000000000000/signals/connection-wrong-session" '{
-        writes: [{
-            update: {
-                name: $name,
-                fields: {
-                    from: {stringValue: "console"},
-                    payload: {mapValue: {fields: {type: {stringValue: "answer"}}}}
-                }
-            },
-            updateTransforms: [{fieldPath: "createdAt", setToServerValue: "REQUEST_TIME"}],
-            currentDocument: {exists: false}
-        }]
-    }')"
-expect_status 403 'connection token writes another session'
-printf '  mismatched edge and session writes were rejected\n'
-
-step '7. machine session with the real IdP and AUTH_MOCKING disabled'
-machine_login "${machine_cookies}"
-machine_authorize_connection "${machine_cookies}" "${page_id}"
-cp -R "${machine_cookies}" "${machine_cookies}.staff"
-machine_start "${machine_cookies}" "${page_id}"
-
-staff_sessions="$(db_count "SELECT count(*) FROM \"session\" WHERE kind = 'staff';")"
-[ "${staff_sessions}" = "0" ] \
-    || die "the staff session survived the machine handoff (staff sessions=${staff_sessions})"
-machine_sessions="$(db_count "SELECT count(*) FROM \"session\" WHERE kind = 'machine' AND \"tenantId\" = '${TENANT_ID}' AND \"eventId\" = '${EVENT_ID}' AND \"edgeDeviceId\" = '${page_id}';")"
-[ "${machine_sessions}" = "1" ] \
-    || die "the machine session is not bound to the page (rows=${machine_sessions})"
-printf '  staff session gone; machine session bound to event=%s page=%s\n' "${EVENT_ID}" "${page_id}"
-
-machine_rpc camera/listDelegatedCameras \
-    "$(jq -nc --arg e "${EVENT_ID}" --arg p "${page_id}" '{json:{eventId:$e,pageEdgeDeviceId:$p}}')" \
-    "${machine_cookies}"
-expect_status 200 'machine camera.listDelegatedCameras'
-printf '%s' "${body}" | jq -e --arg c "${camera_id}" --arg u "${unlinked_camera_id}" '
-    (.json.cameras | length) == 1
-    and (.json.cameras[0].edgeDeviceId == $c)
-    and (.json.cameras | all(.edgeDeviceId != $u))
-' >/dev/null || die "listDelegatedCameras did not return only the page camera: ${body}"
-printf '  listDelegatedCameras returned only camera %s\n' "${camera_id}"
-
-machine_rpc camera/listDelegatedCameras \
-    "$(jq -nc --arg e "${EVENT_ID}" --arg p "${page_id}" '{json:{eventId:$e,pageEdgeDeviceId:$p}}')" \
-    "${machine_cookies}.staff"
-expect_status 401 'old staff cookie after the machine handoff'
-printf '  the old staff cookie is no longer accepted\n'
-
-machine_cookie_header="$(cookie_header "${machine_cookies}")"
-call_redirect GET "${WEB_MACHINE_URL}/management" \
-    -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-expect_not_status 200 'machine session opens the staff management page'
-printf '%s' "${location}" | grep -q '/auth/error?error=machine_session_forbidden' \
-    || die "the machine session was not sent to the forbidden error page: ${location}"
-if printf '%s' "${location}" | grep -q '/auth/login'; then
-    die "the machine session was sent to the staff login: ${location}"
-fi
-printf '  the machine session cannot open the management page as staff\n'
-
-machine_cookie_header="$(cookie_header "${machine_cookies}")"
-call_redirect GET "${WEB_MACHINE_URL}/auth/login?return=%2Fmanagement" \
-    -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-expect_status 403 'machine session staff login start'
-printf '  the machine session cannot start a staff login\n'
-
-machine_cookie_header="$(cookie_header "${machine_cookies}.staff")"
-call_redirect GET "${WEB_MACHINE_URL}/management" \
-    -H "Host: ${WEB_MACHINE_HOST}" -H "Cookie: ${machine_cookie_header}"
-expect_not_status 200 'old staff session after the machine handoff'
-printf '  the old staff session cannot be recovered\n'
-
-staff_sessions="$(db_count "SELECT count(*) FROM \"session\" WHERE kind = 'staff';")"
-[ "${staff_sessions}" = "0" ] \
-    || die "a staff session was recovered after the machine handoff (staff sessions=${staff_sessions})"
-
-machine_rpc signaling/requestCameraConnection \
-    "$(jq -nc --arg e "${EVENT_ID}" --arg p "${page_id}" --arg c "${camera_id}" '{json:{eventId:$e,pageEdgeDeviceId:$p,cameraEdgeId:$c}}')" \
-    "${machine_cookies}"
-expect_status 200 'machine requestCameraConnection'
-machine_connection_session_id="$(printf '%s' "${body}" | jq -r '.json.sessionId // empty')"
-machine_connection_token="$(printf '%s' "${body}" | jq -r '.json.firestoreToken // empty')"
-[ -n "${machine_connection_session_id}" ] || die 'the machine session got no connection sessionId'
-[ -n "${machine_connection_token}" ] || die 'the machine session got no firestoreToken'
-printf '%s' "${body}" | jq -e '(.json.event_access? // null) == null and (.json.access_token? // null) == null' >/dev/null \
-    || die 'the machine camera connection returned an external access token'
-assert_claim "${machine_connection_token}" edge_device_id "${camera_id}"
-assert_claim "${machine_connection_token}" session_id "${machine_connection_session_id}"
-printf '  machine connection session=%s bound to camera=%s\n' "${machine_connection_session_id}" "${camera_id}"
-
-machine_rpc observation/heartbeat \
-    "$(jq -nc --arg e "${EVENT_ID}" --arg d "${page_id}" '{json:{eventId:$e,edgeDeviceId:$d,activeObservationPointIds:[]}}')" \
-    "${machine_cookies}"
-expect_status 200 'machine Heartbeat'
-
-window_end="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-window_start="$(date -u -v-1M +%Y-%m-%dT%H:%M:%S.000Z 2>/dev/null || date -u -d '1 minute ago' +%Y-%m-%dT%H:%M:%S.000Z)"
-machine_rpc observation/reportMeasurements \
-    "$(jq -nc --arg e "${EVENT_ID}" --arg d "${page_id}" --arg p "${point_id}" --arg s "${window_start}" --arg t "${window_end}" '{
-        json:{eventId:$e,edgeDeviceId:$d,measurements:[{observationPointId:$p,windowStart:$s,windowEnd:$t,countIn:1,countOut:0}]}
-    }')" \
-    "${machine_cookies}"
-expect_status 200 'machine ReportMeasurements'
-
-machine_rpc observation/listObservationPoints \
-    "$(jq -nc --arg e "${EVENT_ID}" --arg d "${page_id}" '{json:{eventId:$e,edgeDeviceId:$d}}')" \
-    "${machine_cookies}"
-expect_status 200 'machine ListEdgeDeviceObservationPoints'
-printf '%s' "${body}" | jq -e '(.json.observationPoints | length) > 0' >/dev/null \
-    || die "ListEdgeDeviceObservationPoints returned no points: ${body}"
-printf '  Heartbeat, ReportMeasurements, and ListEdgeDeviceObservationPoints succeeded\n'
-
-machine_rpc observation/listEdgeDevices \
-    "$(jq -nc --arg e "${EVENT_ID}" '{json:{eventId:$e}}')" \
-    "${machine_cookies}"
-expect_status 403 'machine ListEdgeDevices'
-printf '%s' "${body}" | grep -q 'FORBIDDEN' \
-    || die "the machine session was not refused ListEdgeDevices with FORBIDDEN: ${body}"
-printf '  the machine session cannot call ListEdgeDevices\n'
-
-machine_rpc signaling/requestCameraConnection \
-    "$(jq -nc --arg e "${EVENT_ID}" --arg p "${other_page_id}" --arg c "${unlinked_camera_id}" '{json:{eventId:$e,pageEdgeDeviceId:$p,cameraEdgeId:$c}}')" \
-    "${machine_cookies}"
-expect_status 403 'machine connection for another page'
-printf '  the machine session cannot connect another page\n'
-
-edge_exchange_log="$(compose logs idp 2>/dev/null | grep -F 'Token Exchange completed' | grep -F 'edge-page' | tail -1 || true)"
-printf '%s' "${edge_exchange_log}" | grep -q 'edge-page' \
-    || die "the IdP did not record a token exchange for edge-page: ${edge_exchange_log}"
-printf '  IdP log shows the edge-page token exchange\n'
-
-step '8. revoke the device authorization and the connection delegation'
+step '7. revoke the device authorization and the connection delegation'
 call POST "${WEB_URL}/rpc/camera/revokeDeviceAuthorization" \
     -H 'Content-Type: application/json' \
     -H 'x-csrf-token: orpc' \

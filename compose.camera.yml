@@ -1,165 +1,24 @@
-# The default build contexts pin the camera branches. Set TOLO_REPOS_ROOT to
-# the directory that contains the checkouts to build local sources instead.
+# Camera-specific overlay for the real-IdP stack.
+#
+# Use with:
+#   compose.yml, compose.tm.yml, compose.idp.yml, compose.idp-web.yml,
+#   compose.obs.yml, compose.edge.yml, compose.web.yml
+#
+# Build the camera service images from the feature branches and pass them as
+# TOLO_*_IMAGE (see scripts/camera-e2e.sh). The base compose files keep the
+# normal build contexts and image defaults.
 services:
-    server:
-        image: ${TOLO_GATEWAY_CAMERA_IMAGE:-tolo-service-gateway:camera-e2e}
-        build:
-            context: ${TOLO_GATEWAY_SOURCE:-https://github.com/pj-hoakari/tolo-service-gateway.git#25b1a5da305b23271103a1292e3ab5afabdc41eb}
-            dockerfile: Dockerfile
-        depends_on:
-            idp-camera-user-seed:
-                condition: service_completed_successfully
-        environment:
-            IDP_ISSUER: http://idp:8080
-        ports: !override
-            - "127.0.0.1:18090:8080"
-
     idp:
-        image: ${TOLO_IDP_CAMERA_IMAGE:-tolo-idp:camera-e2e}
-        build:
-            context: ${TOLO_IDP_SOURCE:-https://github.com/pj-hoakari/tolo-idp.git#30e91d9ccb04642cbdc342be656eea2776d2c2b0}
         environment:
+            # The locally built tolo-idp image is the JVM runtime.
             SPRING_PROFILES_ACTIVE: dev-jvm
-            TOLO_IDP_ISSUER: http://idp:8080
-            TOLO_IDP_RELATION_BASE_URL: http://idp-relation-stub:8080
-            SPRING_CONFIG_ADDITIONAL_LOCATION: file:/etc/tolo-idp/console-ui.yaml,file:/etc/tolo-idp/console-ui-camera.yaml
-        volumes:
-            - ./config/idp/console-ui-camera.yaml:/etc/tolo-idp/console-ui-camera.yaml:ro
-        ports: !override
-            - "127.0.0.1:18080:8080"
-
-    idp-relation-stub:
-        image: ${TOLO_RELATION_STUB_CAMERA_IMAGE:-tolo-relation-stub:camera-e2e}
-        build:
-            context: ${TOLO_RELATION_STUB_SOURCE:-https://github.com/pj-hoakari/tolo-relation-stub.git#f1357b2e7f770c4a571720faeb1e0cf82c3b4737}
-        environment:
-            RELATION_DATA: /data/relation-camera.json
-        volumes:
-            - ./config/idp:/data:ro
-        networks:
-            - idp
-        ports: !override
-            - "127.0.0.1:18181:8080"
-
-    idp-camera-user-seed:
-        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
-        entrypoint: ["/bin/sh", "-c"]
-        command:
-            - |
-              set -eu
-              url="postgres://tolo_idp:$${TOLO_IDP_DB_PASSWORD}@idp-db:5432/tolo_idp?sslmode=disable"
-              for _ in $$(seq 1 180); do
-                if [ "$$(psql "$$url" -tAc "SELECT COUNT(*) FROM idp_users WHERE tenant_id = 'tenant-a' AND username = 'user-123'")" = "1" ]; then
-                  psql "$$url" --set=ON_ERROR_STOP=1 -c "
-                    INSERT INTO idp_users (id, tenant_id, username, password, enabled)
-                    SELECT '01234567-89ab-cdef-0123-456789abcdef', '0123456789abcdef', username, password, enabled
-                    FROM idp_users
-                    WHERE tenant_id = 'tenant-a' AND username = 'user-123'
-                    ON CONFLICT (tenant_id, username) DO NOTHING;
-                    INSERT INTO idp_user_authorities (user_id, authority)
-                    SELECT fixed.id, legacy_authority.authority
-                    FROM idp_users fixed
-                    JOIN idp_users legacy
-                      ON legacy.tenant_id = 'tenant-a' AND legacy.username = 'user-123'
-                    JOIN idp_user_authorities legacy_authority
-                      ON legacy_authority.user_id = legacy.id
-                    WHERE fixed.tenant_id = '0123456789abcdef' AND fixed.username = 'user-123'
-                      AND NOT EXISTS (
-                        SELECT 1 FROM idp_user_authorities existing
-                        WHERE existing.user_id = fixed.id
-                          AND existing.authority = legacy_authority.authority
-                      );
-                  "
-                  exit 0
-                fi
-                sleep 1
-              done
-              echo "the IdP seed user did not appear" >&2
-              exit 1
-        environment:
-            TOLO_IDP_DB_PASSWORD: ${TOLO_IDP_DB_PASSWORD:-tolo_idp}
-        networks:
-            - idp-store
-        depends_on:
-            idp-db:
-                condition: service_healthy
-            idp:
-                condition: service_started
-        restart: "no"
-
-    observation:
-        image: ${TOLO_OBS_CAMERA_IMAGE:-tolo-observation:camera-e2e}
-        build:
-            context: ${TOLO_OBS_SOURCE:-https://github.com/pj-hoakari/tolo-observation.git#fc949562623911764c312237f3097bca78ae6f79}
-        depends_on: !override
-            observation-migrate:
-                condition: service_completed_successfully
-            server:
-                condition: service_started
-            nats:
-                condition: service_healthy
-
-    observation-migrate:
-        image: ${TOLO_OBS_MIGRATE_CAMERA_IMAGE:-tolo-observation-migrate:camera-e2e}
-        build:
-            context: ${TOLO_OBS_SOURCE:-https://github.com/pj-hoakari/tolo-observation.git#fc949562623911764c312237f3097bca78ae6f79}
-            target: migrate
-
-    firebase-emulator:
-        image: ${TOLO_FIREBASE_EMULATOR_CAMERA_IMAGE:-tolo-firebase-emulator:camera-e2e}
-        build:
-            context: ./firebase-emulator
-        ports: !override
-            - "127.0.0.1:18086:8080"
-            - "127.0.0.1:19099:9099"
-            - "127.0.0.1:14000:4000"
 
     edge-bridge:
-        image: ${TOLO_EDGE_BRIDGE_CAMERA_IMAGE:-tolo-edge-bridge:camera-e2e}
-        build:
-            context: ${TOLO_EDGE_BRIDGE_SOURCE:-https://github.com/pj-hoakari/tolo-edge-bridge.git#e2af557cf677a1116ef65fc6370a21f36f785c0d}
         environment:
-            IDP_ISSUER: http://idp:8080
-            IDP_AUDIENCE: backend-api
-            IDP_JWKS_URL: http://idp:8080/oauth2/jwks
-            CONSOLE_CLIENT_ID: console-ui
-            EDGE_CLIENT_ID: edge-page
             CAMERA_CLIENT_ID: esp-camera
             CONNECTION_CLIENT_ID: observation-connection
-        ports: !override
-            - "127.0.0.1:18787:8787"
-
-    web-db:
-        image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
-        environment:
-            POSTGRES_DB: tolo_web
-            POSTGRES_USER: tolo_web
-            POSTGRES_PASSWORD: ${TOLO_WEB_DB_PASSWORD:-tolo_web}
-        networks:
-            - web
-        healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
-            interval: 5s
-            timeout: 5s
-            retries: 20
-            start_period: 5s
-
-    web-db-migrate:
-        image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
-        command: ["node", "scripts/migrate-auth-db.mjs"]
-        environment:
-            AUTH_DATABASE_URL: postgres://tolo_web:${TOLO_WEB_DB_PASSWORD:-tolo_web}@web-db:5432/tolo_web
-        networks:
-            - web
-        depends_on:
-            web-db:
-                condition: service_healthy
-        restart: "no"
 
     web:
-        image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
-        build:
-            context: ${TOLO_WEB_SOURCE:-https://github.com/pj-hoakari/tolo-web.git#461fa308af6cf0e6c979665832748b7a642fd836}
         environment:
             ROOT_DOMAIN: localhost
             AUTH_MOCKING: enabled
@@ -171,92 +30,13 @@ services:
             TENANT_ACCESS_TOKEN: ${TENANT_ACCESS_TOKEN:-}
             GRAPH_ACCESS_TOKEN: ${GRAPH_ACCESS_TOKEN:-}
             OBSERVATION_ACCESS_TOKEN: ${OBSERVATION_ACCESS_TOKEN:-}
-            AUTH_DATABASE_URL: postgres://tolo_web:${TOLO_WEB_DB_PASSWORD:-tolo_web}@web-db:5432/tolo_web
-            AUTH_SECRET: ${AUTH_SECRET:-camera-e2e-bff-secret-that-is-long-enough}
-            AUTH_IDP_ISSUER: http://idp:8080
-            AUTH_IDP_CLIENT_ID: console-ui
-            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
             AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
             AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
             AUTH_CONNECTION_REDIRECT_URI: http://localhost:13000/api/auth/connection/callback
             AUTH_CONNECTION_TTL_SECONDS: "86400"
             AUTH_RESOURCE_HOST: api.example.com
             FIREBASE_PROJECT_ID: demo-tolo
-            FIRESTORE_EMULATOR_HOST: 127.0.0.1:18086
-            FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:19099
-        volumes:
-            - type: bind
-              source: ${TOLO_WEB_MODELS_DIR:-./config/models}
-              target: /app/public/models
-              read_only: true
+            FIRESTORE_EMULATOR_HOST: 127.0.0.1:8081
+            FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
         ports: !override
             - "127.0.0.1:13000:3000"
-        depends_on: !override
-            server:
-                condition: service_started
-            edge-bridge:
-                condition: service_started
-            idp:
-                condition: service_started
-            web-db:
-                condition: service_healthy
-            web-db-migrate:
-                condition: service_completed_successfully
-
-    web-machine:
-        image: ${TOLO_WEB_CAMERA_IMAGE:-tolo-web:camera-e2e}
-        environment:
-            ROOT_DOMAIN: localhost
-            AUTH_MOCKING: disabled
-            AUTH_BASE_URL: http://localhost:13001
-            TENANT_SUBDOMAIN_MOCKING: enabled
-            OBSERVATION_API_MOCKING: disabled
-            GATEWAY_URL: http://server:8080
-            SIGNALING_URL: http://edge-bridge:8787
-            AUTH_DATABASE_URL: postgres://tolo_web:${TOLO_WEB_DB_PASSWORD:-tolo_web}@web-db:5432/tolo_web
-            AUTH_SECRET: ${AUTH_SECRET:-camera-e2e-bff-secret-that-is-long-enough}
-            AUTH_IDP_ISSUER: http://idp:8080
-            AUTH_IDP_CLIENT_ID: console-ui
-            AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
-            AUTH_IDP_CONNECTION_CLIENT_ID: observation-connection
-            AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
-            AUTH_CONNECTION_REDIRECT_URI: http://localhost:13001/api/auth/connection/callback
-            AUTH_CONNECTION_TTL_SECONDS: "86400"
-            AUTH_IDP_MACHINE_CLIENT_ID: edge-page
-            AUTH_IDP_MACHINE_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
-            AUTH_IDP_MACHINE_REDIRECT_URI: http://localhost:13001/api/auth/machine/callback
-            AUTH_RESOURCE_HOST: api.example.com
-            FIREBASE_PROJECT_ID: demo-tolo
-            FIRESTORE_EMULATOR_HOST: 127.0.0.1:18086
-            FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:19099
-        volumes:
-            - type: bind
-              source: ${TOLO_WEB_MODELS_DIR:-./config/models}
-              target: /app/public/models
-              read_only: true
-        ports: !override
-            - "127.0.0.1:13001:3000"
-        networks:
-            - web
-            - idp
-        depends_on: !override
-            server:
-                condition: service_started
-            edge-bridge:
-                condition: service_started
-            idp:
-                condition: service_started
-            web-db:
-                condition: service_healthy
-            web-db-migrate:
-                condition: service_completed_successfully
-
-# Keep the camera stack isolated from a normal tolo compose project even
-# though the shared compose file names these resources explicitly.
-networks:
-    idp:
-        name: ${COMPOSE_PROJECT_NAME:-tolo-camera-e2e}-idp
-
-volumes:
-    idp-introspection:
-        name: ${COMPOSE_PROJECT_NAME:-tolo-camera-e2e}-idp-introspection
