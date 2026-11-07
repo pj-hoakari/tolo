@@ -35,6 +35,10 @@ if [ -n "${TOLO_REPOS_ROOT:-}" ]; then
     set_local_source TOLO_OBS_SOURCE tolo-observation
     set_local_source TOLO_EDGE_BRIDGE_SOURCE tolo-edge-bridge
     set_local_source TOLO_WEB_SOURCE tolo-web
+
+    if [ -z "${TOLO_WEB_MODELS_DIR:-}" ] && [ -d "${repos_root}/tolo-web/public/models" ]; then
+        export TOLO_WEB_MODELS_DIR="$(cd -- "${repos_root}/tolo-web/public/models" && pwd)"
+    fi
 fi
 
 IDP_URL="${IDP_URL:-http://localhost:18080}"

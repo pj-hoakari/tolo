@@ -182,6 +182,7 @@ TOLO_REPOS_ROOT=.. task camera:e2e
 ```
 
 `TOLO_GATEWAY_SOURCE`・`TOLO_IDP_SOURCE`・`TOLO_OBS_SOURCE`・`TOLO_EDGE_BRIDGE_SOURCE`・`TOLO_WEB_SOURCE`・`TOLO_RELATION_STUB_SOURCE` で個別に指定することもできる
+web コンテナへ渡す検出モデルは、既定では空の `config/models` をマウントする。モデルを使うときは `TOLO_WEB_MODELS_DIR` にモデルのディレクトリを指定する
 
 `COMPOSE_FILE` は `compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.camera.yml`、プロジェクト名は `tolo-camera-e2e` になる
 実物の IdP の開発用 seed は `tenant-a` にしかユーザーを作らないため、オーバーレイの `idp-camera-user-seed` が固定テナント `0123456789abcdef` に同じ `user-123` を作る

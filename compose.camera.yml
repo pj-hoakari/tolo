@@ -186,7 +186,7 @@ services:
             FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:19099
         volumes:
             - type: bind
-              source: ../tolo-web/public/models
+              source: ${TOLO_WEB_MODELS_DIR:-./config/models}
               target: /app/public/models
               read_only: true
         ports: !override
@@ -231,7 +231,7 @@ services:
             FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:19099
         volumes:
             - type: bind
-              source: ../tolo-web/public/models
+              source: ${TOLO_WEB_MODELS_DIR:-./config/models}
               target: /app/public/models
               read_only: true
         ports: !override
