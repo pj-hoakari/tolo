@@ -17,7 +17,7 @@ env:
         sh: echo "${TOLO_OWNER_SUB:-user-owner}"
 
 vars:
-    FAKEIDP_IMAGE: ghcr.io/pj-hoakari/tolo-fakeidp:sha-d892c75
+    FAKEIDP_IMAGE: ghcr.io/pj-hoakari/tolo-fakeidp:sha-91f4f63
     TOKEN_TTL_SECONDS: "86400"
 
 tasks:
@@ -40,7 +40,6 @@ tasks:
               --network tolo-idp --network-alias fakeidp
               -p 8082:8080
               -v tolo-idp-introspection:/etc/tolo/idp:ro
-              -e SERVER_ADDR=:8080
               -e FAKE_IDP_ISSUER=http://fakeidp:8080
               -e FAKE_IDP_AUDIENCE=backend-api
               -e FAKE_IDP_INTROSPECTION_CLIENT_ID=gateway-introspection

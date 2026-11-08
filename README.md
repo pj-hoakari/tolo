@@ -54,7 +54,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
 | `compose.idp.yml` | 実物の IdP（tolo-idp）と ingress（ホストの 80 番）。`compose.tm.yml` が要る。`server` はホストの 18090 に移る |
 | `compose.idp-web.yml` | tolo-web を実物の IdP につなぐ。`compose.web.yml` と `compose.idp.yml` が要る |
-| `compose.camera.yml` | ESP32 カメラの e2e 用。`compose.idp.yml`・`compose.idp-web.yml` にカメラ client と web の設定を足す |
+| `compose.camera.yml` | ESP32 カメラの e2e 用。`compose.idp.yml`・`compose.idp-web.yml` に web の設定を足す |
 | `compose.o11y.yml` | Jaeger |
 
 `firebase-emulator/firestore.rules` は、Edge Bridge Service のシグナリング文書と Realtime の最終更新 ID 文書（`deliveryNotifications`）のルールを合わせた、本番の Firebase プロジェクトと同じ内容にする  
@@ -131,7 +131,7 @@ Web から使うテナントとイベントは固定してある
 seed は何度実行しても同じ結果になる  
 Web の URL のホストにはサブドメインを使い、固定のテナントは `<TOLO_TENANT_SUBDOMAIN>.localhost`（既定は `test.localhost`）で開く  
 サブドメインは Tenant Management が持ち、匿名の `ResolveTenantSubdomain` でテナントの ID に引ける  
-SQL は固定した tolo-tenant-management のコミット（`a9976bd`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+SQL は固定した tolo-tenant-management のコミット（`b099464`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
 
 ## 招待の受諾
 
@@ -149,7 +149,7 @@ tolo-web のモックは、テナントのホストへの要求を `AUTH_MOCK_US
 
 tolo-idp が追いつくまでは、開発用の fake IdP でトークンを発行する  
 fake IdP は暫定なので、Docker Compose には含めず `task fakeidp:up` で手動で起動する  
-`task fakeidp:up` は ghcr に公開された tolo-service-gateway の fake IdP（`tolo-fakeidp:sha-d892c75`）を取得し、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
+`task fakeidp:up` は ghcr に公開された tolo-service-gateway の fake IdP（`tolo-fakeidp:sha-91f4f63`）を取得し、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
 ホストからは `http://localhost:8082` で届く  
 失効照会の secret は、`keygen` が書いた名前付きボリューム `tolo-idp-introspection` から読む
 
@@ -166,7 +166,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 
 `task camera:e2e` は、ESP32 の実機を使わずに、カメラのデバイス認可から signaling の接続までを通しで確かめる
 `compose.idp.yml`・`compose.idp-web.yml`・`compose.tm.yml` を使い、実物の IdP・Tenant Management・認証 DB の上に `compose.camera.yml` を重ねる
-`compose.camera.yml` が足すのは、カメラ client（`esp-camera`・`observation-connection`）と web の設定だけになる
+`compose.camera.yml` が足すのは、IdP の JVM プロファイルと web の設定だけになる。カメラ client（`esp-camera`・`observation-connection`）は edge-bridge の既定値を使う
 
 ```bash
 task down

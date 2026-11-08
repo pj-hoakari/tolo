@@ -32,7 +32,7 @@ task fakeidp:up
 
 ### イメージ
 
-ghcr に公開された tolo-tenant-management の固定コミット（`a9976bd`、v0.8.0-dev）のイメージを、サーバーとマイグレーション用（`migrate` ターゲット）に使う。同じコミットの git URL もビルドコンテキストとして残してある  
+ghcr に公開された tolo-tenant-management の固定コミット（`b099464`、v0.8.0）のイメージを、サーバーとマイグレーション用（`migrate` ターゲット）に使う。同じコミットの git URL もビルドコンテキストとして残してある  
 `config/seed/tenant-management.sql` はこのコミットのスキーマに合わせて書いてあるので、コミットを上げるときは seed も直す
 
 未公開の版で試すときは、tolo-tenant-management のリポジトリでイメージを作り、`TOLO_TM_IMAGE` と `TOLO_TM_MIGRATE_IMAGE` で差し替える

@@ -16,10 +16,10 @@ services:
             retries: 60
 
     edge-bridge:
-        image: ${TOLO_EDGE_BRIDGE_IMAGE:-ghcr.io/pj-hoakari/tolo-edge-bridge:sha-e5a530c}
+        image: ${TOLO_EDGE_BRIDGE_IMAGE:-ghcr.io/pj-hoakari/tolo-edge-bridge:sha-88039df}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#e5a530c0eecbf7d765a83f5523994124c645f594
+            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#88039dfece8d5dfd57050dd1682aaca02186ffd7
         environment:
             SERVER_ADDR: ":8787"
             FIRESTORE_PROJECT_ID: demo-tolo
