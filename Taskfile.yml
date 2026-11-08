@@ -40,7 +40,6 @@ tasks:
               --network tolo-idp --network-alias fakeidp
               -p 8082:8080
               -v tolo-idp-introspection:/etc/tolo/idp:ro
-              -e SERVER_ADDR=:8080
               -e FAKE_IDP_ISSUER=http://fakeidp:8080
               -e FAKE_IDP_AUDIENCE=backend-api
               -e FAKE_IDP_INTROSPECTION_CLIENT_ID=gateway-introspection

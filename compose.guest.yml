@@ -13,11 +13,8 @@ services:
         build:
             context: https://github.com/pj-hoakari/tolo-guest.git#15aacd7aa0c8eb5f02eabee9606279152a999a01
         environment:
-            SERVER_ADDR: :8080
             DATABASE_URL: postgres://guest-db:5432/guest?sslmode=disable&user=guest&password=${TOLO_GUEST_DB_PASSWORD:-guest}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
-            INTERNAL_JWT_ISSUER: service-gateway
-            INTERNAL_JWT_AUDIENCE: tolo-guest
             OBSERVATION_URL: http://server:8090
             OPERATION_URL: http://server:8090
             GRAPH_AUTHORING_URL: http://server:8090

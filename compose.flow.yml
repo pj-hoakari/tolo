@@ -5,9 +5,6 @@ services:
         build:
             context: https://github.com/pj-hoakari/tolo-flow-control.git#36d8f3b61a2236e5f88631c3261200412671d09b
         environment:
-            PORT: "8080"
-            TOLO_RPC_MAX_REQUEST_BYTES: "8388608"
-            TOLO_RPC_MAX_EXECUTION_SEC: "720"
             TOLO_GRAPH_MAX_NODES: "60"
             TOLO_GRAPH_MAX_EDGES: "150"
         read_only: true

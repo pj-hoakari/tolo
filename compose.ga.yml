@@ -9,11 +9,8 @@ services:
         build:
             context: https://github.com/pj-hoakari/tolo-graph-authoring.git#3354316b6dd043c75960f640a879a767f3f02c56
         environment:
-            SERVER_ADDR: :8080
             DATABASE_URL: postgres://graph-authoring-db:5432/graph_authoring?sslmode=disable&user=graph_authoring&password=${TOLO_GA_DB_PASSWORD:-graph_authoring}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
-            INTERNAL_JWT_ISSUER: service-gateway
-            INTERNAL_JWT_AUDIENCE: tolo-graph-authoring
             TENANT_MANAGEMENT_URL: http://server:8090
         networks:
             - graph-authoring

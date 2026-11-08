@@ -54,7 +54,7 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.web.yml` | tolo-web の `dev` ターゲット（ホストの 3000）。`compose.edge.yml` と `NPM_TOKEN` が要る |
 | `compose.idp.yml` | 実物の IdP（tolo-idp）と ingress（ホストの 80 番）。`compose.tm.yml` が要る。`server` はホストの 18090 に移る |
 | `compose.idp-web.yml` | tolo-web を実物の IdP につなぐ。`compose.web.yml` と `compose.idp.yml` が要る |
-| `compose.camera.yml` | ESP32 カメラの e2e 用。`compose.idp.yml`・`compose.idp-web.yml` にカメラ client と web の設定を足す |
+| `compose.camera.yml` | ESP32 カメラの e2e 用。`compose.idp.yml`・`compose.idp-web.yml` に web の設定を足す |
 | `compose.o11y.yml` | Jaeger |
 
 `firebase-emulator/firestore.rules` は、Edge Bridge Service のシグナリング文書と Realtime の最終更新 ID 文書（`deliveryNotifications`）のルールを合わせた、本番の Firebase プロジェクトと同じ内容にする  
@@ -166,7 +166,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 
 `task camera:e2e` は、ESP32 の実機を使わずに、カメラのデバイス認可から signaling の接続までを通しで確かめる
 `compose.idp.yml`・`compose.idp-web.yml`・`compose.tm.yml` を使い、実物の IdP・Tenant Management・認証 DB の上に `compose.camera.yml` を重ねる
-`compose.camera.yml` が足すのは、カメラ client（`esp-camera`・`observation-connection`）と web の設定だけになる
+`compose.camera.yml` が足すのは、IdP の JVM プロファイルと web の設定だけになる。カメラ client（`esp-camera`・`observation-connection`）は edge-bridge の既定値を使う
 
 ```bash
 task down
