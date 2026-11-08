@@ -42,9 +42,9 @@ issuer は `http://auth.tolo.localhost` で、ブラウザ・ホストの curl�
 
 ### イメージ
 
-ghcr に公開されている native ビルドのイメージ（`ghcr.io/pj-hoakari/tolo-idp` の `0.4.0`）を、digest まで固定して使う  
+ghcr に公開されている native ビルドのイメージ（`ghcr.io/pj-hoakari/tolo-idp` の `0.4.1`）を、digest まで固定して使う  
 ほかのサービスと違い、git からはビルドしない  
-`0.4.0` は linux/amd64 と linux/arm64 の両方が公開されていて、arm64 のマシン（Apple Silicon）でも起動する  
+`0.4.1` は linux/amd64 と linux/arm64 の両方が公開されていて、arm64 のマシン（Apple Silicon）でも起動する  
 手元でビルドしたイメージは `TOLO_IDP_IMAGE` で差し替える
 
 ### プロファイル

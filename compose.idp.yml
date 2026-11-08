@@ -46,7 +46,7 @@ services:
         restart: "no"
 
     idp:
-        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:0.4.0@sha256:be918fbd97c1c409140b2185556d07cddbf433eb066c9bc0acabdbfd263da085}
+        image: ${TOLO_IDP_IMAGE:-ghcr.io/pj-hoakari/tolo-idp:0.4.1@sha256:b968557a49a5535232d10de3f3a8c45904710856efa2448aba4278507cae3fcd}
         environment:
             SPRING_PROFILES_ACTIVE: dev-native
             SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
