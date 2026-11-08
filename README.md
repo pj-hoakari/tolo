@@ -131,7 +131,7 @@ Web から使うテナントとイベントは固定してある
 seed は何度実行しても同じ結果になる  
 Web の URL のホストにはサブドメインを使い、固定のテナントは `<TOLO_TENANT_SUBDOMAIN>.localhost`（既定は `test.localhost`）で開く  
 サブドメインは Tenant Management が持ち、匿名の `ResolveTenantSubdomain` でテナントの ID に引ける  
-SQL は固定した tolo-tenant-management のコミット（`a9976bd`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+SQL は固定した tolo-tenant-management のコミット（`b099464`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
 
 ## 招待の受諾
 
@@ -149,7 +149,7 @@ tolo-web のモックは、テナントのホストへの要求を `AUTH_MOCK_US
 
 tolo-idp が追いつくまでは、開発用の fake IdP でトークンを発行する  
 fake IdP は暫定なので、Docker Compose には含めず `task fakeidp:up` で手動で起動する  
-`task fakeidp:up` は ghcr に公開された tolo-service-gateway の fake IdP（`tolo-fakeidp:sha-d892c75`）を取得し、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
+`task fakeidp:up` は ghcr に公開された tolo-service-gateway の fake IdP（`tolo-fakeidp:sha-91f4f63`）を取得し、`docker run` でネットワーク `tolo-idp` に別名 `fakeidp` で参加させる  
 ホストからは `http://localhost:8082` で届く  
 失効照会の secret は、`keygen` が書いた名前付きボリューム `tolo-idp-introspection` から読む
 

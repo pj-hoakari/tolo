@@ -25,10 +25,10 @@ services:
             - operation
 
     operation:
-        image: ${TOLO_OP_IMAGE:-ghcr.io/pj-hoakari/tolo-operation:sha-0a21a87}
+        image: ${TOLO_OP_IMAGE:-ghcr.io/pj-hoakari/tolo-operation:sha-d54522c}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#57b04d521763c32ca877c324c85a5864280203f6
+            context: https://github.com/pj-hoakari/tolo-operation.git#d54522c4a75725b3eee9415b25bf53e0e6b8922c
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://operation-db:5432/operation?sslmode=disable&user=operation&password=${TOLO_OP_DB_PASSWORD:-operation}
@@ -50,10 +50,10 @@ services:
                 condition: service_started
 
     operation-migrate:
-        image: ${TOLO_OP_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-operation-migrate:sha-0a21a87}
+        image: ${TOLO_OP_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-operation-migrate:sha-d54522c}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#57b04d521763c32ca877c324c85a5864280203f6
+            context: https://github.com/pj-hoakari/tolo-operation.git#d54522c4a75725b3eee9415b25bf53e0e6b8922c
             target: migrate
         command:
             - -database

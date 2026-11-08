@@ -25,10 +25,10 @@ services:
             - observation
 
     observation:
-        image: ${TOLO_OBS_IMAGE:-ghcr.io/pj-hoakari/tolo-observation:sha-f292c45}
+        image: ${TOLO_OBS_IMAGE:-ghcr.io/pj-hoakari/tolo-observation:sha-ce214e8}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#93bb0e5f5d9a04f7e15ba5f5bc4c77e1bdd9d15e
+            context: https://github.com/pj-hoakari/tolo-observation.git#ce214e8db14c50ec7c2d93ca9ea95fd6905cc753
         environment:
             SERVER_ADDR: :8080
             DATABASE_URL: postgres://observation-db:5432/observation?sslmode=disable&user=observation&password=${TOLO_OBS_DB_PASSWORD:-observation}
@@ -54,10 +54,10 @@ services:
                 condition: service_started
 
     observation-migrate:
-        image: ${TOLO_OBS_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-observation-migrate:sha-f292c45}
+        image: ${TOLO_OBS_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-observation-migrate:sha-ce214e8}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-observation.git#93bb0e5f5d9a04f7e15ba5f5bc4c77e1bdd9d15e
+            context: https://github.com/pj-hoakari/tolo-observation.git#ce214e8db14c50ec7c2d93ca9ea95fd6905cc753
             target: migrate
         command:
             - -database
