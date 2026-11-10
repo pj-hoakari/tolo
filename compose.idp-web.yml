@@ -24,7 +24,7 @@ services:
                 condition: service_started
 
     web-auth-schema:
-        image: ${TOLO_WEB_IMAGE:-tolo-web:5d3c72e}
+        image: ${TOLO_WEB_IMAGE:-tolo-web:381d1bc}
         command: ["cp", "/app/db/auth.sql", "/schema/auth.sql"]
         volumes:
             - web-auth-schema:/schema
