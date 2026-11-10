@@ -57,3 +57,32 @@ COMPOSE_PROJECT_NAME=toloobscheck COMPOSE_FILE=compose.yml:compose.tm.yml:compos
 | `GetEventOverview` の `hall` | 人数スコア `2`（止まった観測点を除いた 1 つの値） |
 
 この確認は GitHub Actions の `E2E` でも、Graph Authoring の確認の後に走る
+
+## 計測値の書き出し
+
+`scripts/observation-export.sh` は、1 つのイベントの計測値と、後から flow-control に流し込むのに要るデータを、1 つのディレクトリに JSON Lines で書き出す  
+observation-db と graph-authoring-db に `psql` で直接つなぐ。Gateway とトークンは使わない
+
+```bash
+# lab-argo（StatefulSet の observation-db-0 と graph-authoring-db-0 に kubectl exec する）
+./scripts/observation-export.sh -e fedcba9876543210 -n tolo -c <kube context>
+
+# ローカルの compose
+COMPOSE_PROJECT=toloobscheck ./scripts/observation-export.sh -t compose -e <event id>
+```
+
+| ファイル | 中身 |
+| --- | --- |
+| `measurements.jsonl` | 計測値。観測ページの書き出しと同じ形に、受信時刻 `receivedAt` を足したもの |
+| `edge-devices.jsonl` | 端末と、その観測点、カメラの紐づけ先の観測点 |
+| `graph-revisions.jsonl` | 公開した版ごとのグラフと、公開時の観測点の紐づけ（`placements`） |
+| `observation-point-mappings.jsonl` | 今の観測点の紐づけ（下書き） |
+| `snapshots.jsonl`・`optimization-results.jsonl` | 観測サイクルの結果。流し込んだ結果と比べるために残す |
+
+`measurements.jsonl` の 1 行の例
+
+```json
+{"eventId":"fedcba9876543210","edgeDeviceId":"8c1f0e2a5d4b3c6e","observationPointId":"a1b2c3d4e5f60718","observationPointName":"入口","windowStart":"2026-11-11T01:00:00.123Z","windowEnd":"2026-11-11T01:00:30.456Z","countIn":3,"countOut":1,"meanDetectedPeople":2.5,"sent":true,"receivedAt":"2026-11-11T01:00:31.582Z"}
+```
+
+`meanDetectedPeople` と `edgeDeviceId` は、値がないときは欄ごと省く
