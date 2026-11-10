@@ -284,7 +284,6 @@ build_image() {
 
 build_images() {
     build_image TOLO_GATEWAY_IMAGE tolo-service-gateway:camera-e2e "${workspace_dir}/tolo-service-gateway"
-    build_image TOLO_IDP_IMAGE tolo-idp:camera-e2e "${workspace_dir}/tolo-idp"
     build_image TOLO_OBS_IMAGE tolo-observation:camera-e2e "${workspace_dir}/tolo-observation"
     build_image TOLO_OBS_MIGRATE_IMAGE tolo-observation-migrate:camera-e2e "${workspace_dir}/tolo-observation" --target migrate
     build_image TOLO_EDGE_BRIDGE_IMAGE tolo-edge-bridge:camera-e2e "${workspace_dir}/tolo-edge-bridge"

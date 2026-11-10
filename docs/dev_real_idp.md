@@ -42,9 +42,9 @@ issuer は `http://auth.tolo.localhost` で、ブラウザ・ホストの curl�
 
 ### イメージ
 
-ghcr に公開されている native ビルドのイメージ（`ghcr.io/pj-hoakari/tolo-idp` の `0.4.1`）を、digest まで固定して使う  
+ghcr に公開されている native ビルドのイメージ（`ghcr.io/pj-hoakari/tolo-idp` の `0.5.0`）を、digest まで固定して使う  
 ほかのサービスと違い、git からはビルドしない  
-`0.4.1` は linux/amd64 と linux/arm64 の両方が公開されていて、arm64 のマシン（Apple Silicon）でも起動する  
+`0.5.0` は linux/amd64 と linux/arm64 の両方が公開されていて、arm64 のマシン（Apple Silicon）でも起動する  
 手元でビルドしたイメージは `TOLO_IDP_IMAGE` で差し替える
 
 ### プロファイル
@@ -81,7 +81,7 @@ base の `keygen` が作る乱数 secret のボリューム `tolo-idp-introspect
 ## ユーザーと所属の用意
 
 IdP はユーザーをテナントごとに持ち、ログインするテナントは認可要求の `resource`（`https://api.example.com/tenants/<tenant_id>`）で指定する  
-IdP の seed ユーザー（`user-123`）はテナント `tenant-a` にしか作られず、Gateway は `tenant_id` に 16 桁の小文字 hex を要求するので、seed ユーザーのトークンは Gateway を通らない  
+IdP の seed ユーザー（`user-123`）は固定テナント `0123456789abcdef` に作られるが、Tenant Management にその `sub` の所属がないので、IdP はログインを `403` で拒否する  
 代わりに、`scripts/idp-signup.sh` で固定テナント（`0123456789abcdef`）にユーザーを作り、その `sub` で Tenant Management の seed を入れ直す
 
 ```bash

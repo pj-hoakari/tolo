@@ -166,7 +166,7 @@ Gateway と edge-bridge は JWKS を最大 5 分キャッシュするため、�
 
 `task camera:e2e` は、ESP32 の実機を使わずに、カメラのデバイス認可から signaling の接続までを通しで確かめる
 `compose.idp.yml`・`compose.idp-web.yml`・`compose.tm.yml` を使い、実物の IdP・Tenant Management・認証 DB の上に `compose.camera.yml` を重ねる
-`compose.camera.yml` が足すのは、IdP の JVM プロファイルと web の設定だけになる。カメラ client（`esp-camera`・`observation-connection`）は edge-bridge の既定値を使う
+`compose.camera.yml` が足すのは、web の設定だけになる。IdP は `compose.idp.yml` で固定した公開イメージを使う。カメラ client（`esp-camera`・`observation-connection`）は edge-bridge の既定値を使う
 
 ```bash
 task down
@@ -177,12 +177,11 @@ task camera:e2e
 実物の IdP は ingress の 80 番と、固定名のネットワーク `tolo-idp` を使う
 メインの `tolo` スタックと fake IdP が動いていると衝突するため、先に止める
 
-カメラ用のイメージは `TOLO_*_IMAGE` で渡す。設定していない場合は、このリポジトリの兄弟ディレクトリ（`../tolo-*`）からビルドする
+IdP 以外のカメラ用のイメージは `TOLO_*_IMAGE` で渡す。設定していない場合は、このリポジトリの兄弟ディレクトリ（`../tolo-*`）からビルドする
 
 | 環境変数 | 既定のビルド元 |
 | --- | --- |
 | `TOLO_GATEWAY_IMAGE` | `../tolo-service-gateway` |
-| `TOLO_IDP_IMAGE` | `../tolo-idp` |
 | `TOLO_OBS_IMAGE` | `../tolo-observation` |
 | `TOLO_OBS_MIGRATE_IMAGE` | `../tolo-observation`（`migrate` target） |
 | `TOLO_EDGE_BRIDGE_IMAGE` | `../tolo-edge-bridge` |
@@ -192,7 +191,7 @@ task camera:e2e
 `tolo-web` は、削除済みの `vendor/` をコピーしない Dockerfile であること
 
 `COMPOSE_FILE` は `compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml:compose.camera.yml`、プロジェクト名は `tolo-camera-e2e` になる
-実物の IdP の開発用 seed は `tenant-a` にしかユーザーを作らないため、スクリプトが `idp-signup.sh` で固定テナント `0123456789abcdef` の `user-owner` を作り、返った `sub` で `tenant-management-seed` を入れ直す
+実物の IdP の開発用 seed ユーザー（`user-123`）は Tenant Management に所属を持たないため、スクリプトが `idp-signup.sh` で固定テナント `0123456789abcdef` の `user-owner` を作り、返った `sub` で `tenant-management-seed` を入れ直す
 
 確認する内容は次のとおりになる
 
