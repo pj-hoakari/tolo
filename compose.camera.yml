@@ -4,15 +4,10 @@
 #   compose.yml, compose.tm.yml, compose.idp.yml, compose.idp-web.yml,
 #   compose.obs.yml, compose.edge.yml, compose.web.yml
 #
-# Build the camera service images from the feature branches and pass them as
-# TOLO_*_IMAGE (see scripts/camera-e2e.sh). The base compose files keep the
+# Build the camera service images other than tolo-idp from the feature branches
+# and pass them as TOLO_*_IMAGE (see scripts/camera-e2e.sh). The base compose files keep the
 # normal build contexts and image defaults.
 services:
-    idp:
-        environment:
-            # The locally built tolo-idp image is the JVM runtime.
-            SPRING_PROFILES_ACTIVE: dev-jvm
-
     web:
         environment:
             AUTH_MOCKING: enabled
