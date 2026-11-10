@@ -198,8 +198,9 @@ NPM_TOKEN=... docker compose -p toloidpcheck \
 
 ## 既知の制約
 
-tolo-idp 0.4.0 は、`scope` のない Token Exchange に空の `scope` のトークンを発行し、Gateway はそれを `invalid_token` で拒否する  
-tolo-web は交換の要求に、tenant_access が持っている `events.*` の scope を付けて、これを避けている  
+tolo-idp は、`scope` のない Token Exchange に、イベントロール・交換元の scope・client の登録 scope の積を発行する（0.5.0 から）  
+tolo-web はスタッフの交換に `scope` を付けないので、`event_access` には `events.*` のほかに `tenant.read` が載り、owner では `tenant.write` も載る  
+Gateway で `event_access` を受ける RPC は、どれも `events.*` しか要求しない  
 Token Exchange には `openid` scope を渡せない（`invalid_scope` になる）ため、スクリプトは交換時に `openid` を落とす  
 IdP が発行するトークンには Gateway の仕様に無い `resource` claim（`https://api.example.com/tenants/<tenant_id>` 形式）が入るが、Gateway は無視する  
 JWT ヘッダに `typ` は入らず、`alg` は RS256、`kid` は IdP が起動ごとに作る ephemeral な鍵の UUID になる（`TOLO_IDP_JWK_ALLOW_EPHEMERAL=true`）  
