@@ -15,6 +15,7 @@ services:
 
     web:
         environment:
+            ROOT_DOMAIN: localhost
             AUTH_MOCKING: enabled
             AUTH_MOCK_USER_ID: ${TOLO_OWNER_SUB:-user-owner}
             TENANT_SUBDOMAIN_MOCKING: enabled
