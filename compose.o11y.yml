@@ -10,6 +10,7 @@ services:
             - "4318:4318" # OTLP HTTP
         networks:
             - jaeger
+            - push
 
     server:
         environment:
@@ -17,6 +18,14 @@ services:
             OTEL_SERVICE_NAME: tolo-service-gateway
         networks:
             - jaeger
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    push-relay:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: jetstream-http-push
         depends_on:
             jaeger:
                 condition: service_started

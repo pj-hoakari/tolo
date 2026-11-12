@@ -1,0 +1,74 @@
+services:
+    jaeger:
+        networks:
+            - tenant-management
+            - graph-authoring
+            - observation
+            - operation
+            - guest
+            - realtime
+            - web
+
+    tenant-management:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-tenant-management
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    graph-authoring:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-graph-authoring
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    observation:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-observation
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    operation:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-operation
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    edge-bridge:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-edge-bridge
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    guest:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-guest
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    realtime:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-realtime
+        depends_on:
+            jaeger:
+                condition: service_started
+
+    web:
+        environment:
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+            OTEL_SERVICE_NAME: tolo-web
+        depends_on:
+            jaeger:
+                condition: service_started
