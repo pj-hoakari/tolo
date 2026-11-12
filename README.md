@@ -55,7 +55,8 @@ fake IdP がネットワーク `tolo-idp` につながったままだと、そ�
 | `compose.idp.yml` | 実物の IdP（tolo-idp）と ingress（ホストの 80 番）。`compose.tm.yml` が要る。`server` はホストの 18090 に移る |
 | `compose.idp-web.yml` | tolo-web を実物の IdP につなぐ。`compose.web.yml` と `compose.idp.yml` が要る |
 | `compose.camera.yml` | ESP32 カメラの e2e 用。`compose.idp.yml`・`compose.idp-web.yml` に web の設定を足す |
-| `compose.o11y.yml` | Jaeger |
+| `compose.o11y.yml` | Jaeger を起動し、`server` と `push-relay` のトレースを Jaeger へ送る |
+| `compose.o11y-services.yml` | `compose.yml` 以外の既定のファイルにあるサービスのトレースを Jaeger へ送る。既定の構成と `compose.o11y.yml` が要る |
 
 `firebase-emulator/firestore.rules` は、Edge Bridge Service のシグナリング文書と Realtime の最終更新 ID 文書（`deliveryNotifications`）のルールを合わせた、本番の Firebase プロジェクトと同じ内容にする  
 tolo-edge-bridge と tolo-realtime は、それぞれ自分のサービスの分だけのルールを持つ。どちらかのルールを変えたら、このファイルも合わせて変える  
@@ -72,6 +73,22 @@ Operation と Observation は、情報更新の push を NATS JetStream へ publ
 Notification はまだこの環境に含めておらず、`SendPush` は当面ログに出すだけのスケルトンになる  
 `nats` に届くのは `operation`・`observation`・`push-relay` だけで、`guest` と `realtime` の 8080 に届くのは `server` と `push-relay` だけになる  
 `operation` と `observation` は、`push-relay` の `/readyz` が 200 を返してから起動する。購読に届くのは consumer を作った後に publish されたメッセージだけだからである
+
+## トレースの確認（Jaeger）
+
+既定の構成に `compose.o11y.yml` と `compose.o11y-services.yml` を重ねると、Jaeger が起動し、各サービスがトレースを Jaeger へ送る  
+止めるときも同じ `COMPOSE_FILE` で `task down` を実行する
+
+```bash
+export COMPOSE_FILE=compose.yml:compose.tm.yml:compose.ga.yml:compose.obs.yml:compose.op.yml:compose.flow.yml:compose.edge.yml:compose.guest.yml:compose.rt.yml:compose.web.yml:compose.o11y.yml:compose.o11y-services.yml
+task up
+```
+
+Jaeger UI は `http://localhost:16686` で開く  
+トレースを送るのは `server`・`push-relay`・`tenant-management`・`graph-authoring`・`observation`・`operation`・`edge-bridge`・`guest`・`realtime`・`web` になる  
+`flow-control` と `idp` は OTLP でトレースを送る機能を持たないので、送り先を設定していない  
+Jaeger は各サービスがすでに参加しているネットワークに加わるだけで、サービス同士の到達性は変えない  
+Gateway は受け取った `traceparent` を引き継がないので、`web` のトレースと、Gateway から後段へ続くトレースは別のトレースになる
 
 ## イメージの差し替え
 
