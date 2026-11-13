@@ -4,14 +4,16 @@ services:
             - graph-authoring
 
     graph-authoring:
-        image: ${TOLO_GA_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring:sha-3354316}
+        image: ${TOLO_GA_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring:sha-ed00a56}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#3354316b6dd043c75960f640a879a767f3f02c56
+            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#ed00a56abd4996575297c9e8f83886c6ace65187
         environment:
             DATABASE_URL: postgres://graph-authoring-db:5432/graph_authoring?sslmode=disable&user=graph_authoring&password=${TOLO_GA_DB_PASSWORD:-graph_authoring}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
             TENANT_MANAGEMENT_URL: http://server:8090
+            TOLO_GRAPH_MAX_NODES: "60"
+            TOLO_GRAPH_MAX_EDGES: "150"
         networks:
             - graph-authoring
             - graph-authoring-db
@@ -22,10 +24,10 @@ services:
                 condition: service_started
 
     graph-authoring-migrate:
-        image: ${TOLO_GA_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring-migrate:sha-3354316}
+        image: ${TOLO_GA_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-graph-authoring-migrate:sha-ed00a56}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#3354316b6dd043c75960f640a879a767f3f02c56
+            context: https://github.com/pj-hoakari/tolo-graph-authoring.git#ed00a56abd4996575297c9e8f83886c6ace65187
             target: migrate
         command:
             - -database
