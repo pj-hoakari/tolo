@@ -25,10 +25,10 @@ services:
             - operation
 
     operation:
-        image: ${TOLO_OP_IMAGE:-ghcr.io/pj-hoakari/tolo-operation:sha-d54522c}
+        image: ${TOLO_OP_IMAGE:-ghcr.io/pj-hoakari/tolo-operation:sha-c0c52de}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#d54522c4a75725b3eee9415b25bf53e0e6b8922c
+            context: https://github.com/pj-hoakari/tolo-operation.git#c0c52de25b8493f6dff22fc1ee2d7090d5f9d38d
         environment:
             DATABASE_URL: postgres://operation-db:5432/operation?sslmode=disable&user=operation&password=${TOLO_OP_DB_PASSWORD:-operation}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
@@ -46,10 +46,10 @@ services:
                 condition: service_started
 
     operation-migrate:
-        image: ${TOLO_OP_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-operation-migrate:sha-d54522c}
+        image: ${TOLO_OP_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-operation-migrate:sha-c0c52de}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-operation.git#d54522c4a75725b3eee9415b25bf53e0e6b8922c
+            context: https://github.com/pj-hoakari/tolo-operation.git#c0c52de25b8493f6dff22fc1ee2d7090d5f9d38d
             target: migrate
         command:
             - -database

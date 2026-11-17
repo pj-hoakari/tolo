@@ -148,7 +148,7 @@ Web から使うテナントとイベントは固定してある
 seed は何度実行しても同じ結果になる  
 Web の URL のホストにはサブドメインを使い、固定のテナントは `<TOLO_TENANT_SUBDOMAIN>.localhost`（既定は `test.localhost`）で開く  
 サブドメインは Tenant Management が持ち、匿名の `ResolveTenantSubdomain` でテナントの ID に引ける  
-SQL は固定した tolo-tenant-management のコミット（`b099464`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
+SQL は固定した tolo-tenant-management のコミット（`29dd6b1`）のスキーマに合わせて書いてあるので、そのコミットを変えるときは SQL も直す
 
 ## 招待の受諾
 

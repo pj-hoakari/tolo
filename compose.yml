@@ -23,10 +23,10 @@ services:
         restart: "no"
 
     server:
-        image: ${TOLO_GATEWAY_IMAGE:-ghcr.io/pj-hoakari/tolo-service-gateway:sha-3a76f51}
+        image: ${TOLO_GATEWAY_IMAGE:-ghcr.io/pj-hoakari/tolo-service-gateway:sha-de4a1fe}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-service-gateway.git#3a76f512a93fac027775ac9f4f3036ad0f723d99
+            context: https://github.com/pj-hoakari/tolo-service-gateway.git#de4a1fe5e5ce151847dc12cacf6b51d881794812
             target: server
         environment:
             TOLO_GATEWAY_LISTENER_MODE: split
