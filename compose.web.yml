@@ -8,9 +8,9 @@ services:
             - web
 
     web:
-        image: ${TOLO_WEB_IMAGE:-tolo-web:0cc9f7f}
+        image: ${TOLO_WEB_IMAGE:-tolo-web:467b385}
         build:
-            context: https://github.com/pj-hoakari/tolo-web.git#0cc9f7f902180d36dce2fd4c6811724aee7fb150
+            context: https://github.com/pj-hoakari/tolo-web.git#467b385d39dc0338b3ff3ecb974a83e66c086d8e
             target: dev
             secrets:
                 - npm_token
