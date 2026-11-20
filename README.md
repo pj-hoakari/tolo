@@ -221,7 +221,7 @@ IdP 以外のカメラ用のイメージは `TOLO_*_IMAGE` で渡す。設定し
 7. IdP でデバイス認可を失効させ、カメラの Refresh Token が `invalid_grant` になることを確かめる
 
 Firestore のパス束縛ルール（`edge_device_id` / `session_id` と文書パスの照合）は、この E2E とは別に扱う
-観測ページのマシンセッションは tolo-web 側の E2E で扱い、このスクリプトには含めない
+観測ページのマシンセッションは `task machine:e2e` で扱い、このスクリプトには含めない
 
 スタックは終了時に `docker compose down -v` で消える
 残して調べたいときは `KEEP_STACK=1 task camera:e2e` を使い、あとから `task camera:down -- -v` で消す
@@ -241,6 +241,37 @@ Firestore のパス束縛ルール（`edge_device_id` / `session_id` と文書�
 `tolo-web` は BFF のセッションだけをモックし、下流の Observation・Edge Bridge は実物を呼ぶ
 BFF に渡す `tenant_access` と `event_access` は、スクリプトが実物の IdP から取って環境変数で渡す
 
+## 観測ページのマシンセッションの e2e
+
+`task machine:e2e` は、観測ページの端末のセットアップを、実物の IdP と tolo-web の BFF で通しで確かめる
+`compose.yml`・`compose.tm.yml`・`compose.idp.yml`・`compose.obs.yml`・`compose.edge.yml`・`compose.web.yml`・`compose.idp-web.yml` を使い、プロジェクト名は `tolo-machine-session-e2e` になる
+
+```bash
+task down
+task fakeidp:down
+TOLO_WEB_IMAGE=ghcr.io/pj-hoakari/tolo-web:sha-d3ae52e task machine:e2e
+```
+
+`TOLO_WEB_IMAGE` を渡さないときは、`compose.web.yml` の固定コミットから `NPM_TOKEN` でビルドする
+ingress がホストの 80 番を使うので、カメラの e2e のスタックなど、80 番を使うものは先に止める
+
+ブラウザの代わりに curl で、ログイン画面を開かずに IdP の `/api/login` を呼ぶ
+セッションの Cookie は `Secure` 付きで、curl の Cookie jar は `http://*.tolo.localhost` ではそれを保存しないため、スクリプトがホストごとに持って送る
+
+確認する内容は次のとおりになる
+
+1. スタッフとして BFF からログインする。セッションが認証 DB にあり、管理画面を開けること、IdP がログインを求めずに認可コードを出すことを確かめる
+2. 観測ページの端末を登録し、スタッフで console の手続き（`observation.listEdgeDevices`）を呼べることを確かめる
+3. 同じブラウザで発行 URL のセットアップ（`/api/auth/machine/start`）を通す。カメラの接続の委任（`observation-connection`）のあと、`edge-page` の認可が `prompt=login` でログインを求め、handoff と `end_session_endpoint` を経て観測ページに戻る
+4. ブラウザのスタッフのセッションが消え、そのページのマシンのセッションに置き換わったこと、`machineSetupRecord` にページとスタッフの `sub` の記録が 1 件あることを確かめる。古いスタッフの Cookie では管理画面からログインへ戻される
+5. マシンのセッションで、観測ページに許された手続き（`observation.listObservationPoints`）は通り、console の手続きは `403` になることを確かめる
+6. IdP が再びログインを求めることを確かめる
+
+`edge-page` と `observation-connection` の client は tolo-idp の dev プロファイルにあり、`config/idp/console-ui.yaml` で `http://tolo.localhost` の `redirect_uri` に差し替えている。secret は `TOLO_IDP_SEED_CLIENT_SECRET`（既定 `secret`）になる
+
+スタックは終了時に `docker compose down -v` で消える。残して調べたいときは `KEEP_STACK=1` を付ける。残したスタックは、次の実行の最初に消えるほか、`docker compose -p tolo-machine-session-e2e down -v` で消せる
+失敗した要求の本文は、`MACHINE_SESSION_E2E_DEBUG=1` を付けたときだけ表示する
+
 ## タスク
 
 | タスク | 内容 |
@@ -253,9 +284,11 @@ BFF に渡す `tenant_access` と `event_access` は、スクリプトが実物�
 | `task e2e` | オンボーディング・招待の受諾・固定テナントのサブドメイン・Graph Authoring・Observation・Operation の確認、到達性の確認、Gateway のログにトークンが出ていないかの確認を実行する |
 | `task camera:e2e` | ESP32 カメラのデバイス認可から signaling の接続までを、実物の IdP・Tenant Management・認証 DB・Observation・Edge Bridge・Web BFF で確認する |
 | `task camera:down` | カメラ e2e 用のスタックを止める。`task camera:down -- -v` でボリュームも消す |
+| `task machine:e2e` | 観測ページの端末のセットアップを、実物の IdP と tolo-web の BFF で確認する |
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
 GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
+同じワークフローのジョブ `machine-session-e2e` は、`compose.web.yml` で固定したコミットの公開イメージ（`ghcr.io/pj-hoakari/tolo-web:sha-<コミット>`）を `TOLO_WEB_IMAGE` に渡して `task machine:e2e` を実行する
 
 ## ドキュメント
 

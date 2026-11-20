@@ -35,6 +35,17 @@ spring:
               authorization-code-time-to-live: 5m
               access-token-time-to-live: 15m
               access-token-format: self-contained
+          edge-page:
+            registration:
+              redirect-uris:
+                - http://tolo.localhost/api/auth/machine/callback
+              post-logout-redirect-uris:
+                - http://tolo.localhost/auth/logged-out
+          observation-connection:
+            registration:
+              redirect-uris:
+                - http://tolo.localhost/api/auth/connection/callback
+                - http://localhost:13000/api/auth/connection/callback
 
 tolo-idp:
   clients:
