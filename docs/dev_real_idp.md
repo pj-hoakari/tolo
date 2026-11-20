@@ -181,7 +181,7 @@ NPM_TOKEN=... docker compose -p toloidpcheck \
 
 - `web` は `ROOT_DOMAIN=tolo.localhost`、`AUTH_MOCKING=disabled` で動き、client `console-ui` で IdP にログインする
 - `web` のホストの 3000 番は外し、`ingress` 越しの `http://tolo.localhost` と `http://test.tolo.localhost` で開く。tolo-web はルートドメインの origin にポートを付けないので、80 番で公開する必要がある
-- Better Auth の DB は `web-auth-db`（PostgreSQL 18）で、tolo-web のイメージの `db/auth.sql` を `web-auth-schema` が取り出し、DB の初回の起動で流す
+- Better Auth の DB は `web-auth-db`（PostgreSQL 18）で、tolo-web のイメージの `db/migrations` を `web-auth-schema` が取り出し、`web-auth-migrate` が `web` の起動の前に golang-migrate で適用する
 - `edge-bridge` も issuer と JWKS を `http://auth.tolo.localhost` に向ける
 
 ユーザーと所属を「ユーザーと所属の用意」の手順で入れたあと、`http://test.tolo.localhost/management` を開くと、ルートドメインのログイン画面（`http://tolo.localhost/login`）に移る  

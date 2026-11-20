@@ -18,17 +18,32 @@ services:
         networks:
             - web-auth-db
         depends_on:
-            web-auth-db:
-                condition: service_healthy
+            web-auth-migrate:
+                condition: service_completed_successfully
             ingress:
                 condition: service_started
 
     web-auth-schema:
-        image: ${TOLO_WEB_IMAGE:-tolo-web:467b385}
-        command: ["cp", "/app/db/auth.sql", "/schema/auth.sql"]
+        image: ${TOLO_WEB_IMAGE:-tolo-web:d3ae52e}
+        user: "0"
+        command: ["cp", "-R", "/app/db/migrations/.", "/migrations"]
         volumes:
-            - web-auth-schema:/schema
+            - web-auth-migrations:/migrations
         network_mode: none
+        restart: "no"
+
+    web-auth-migrate:
+        image: migrate/migrate:v4.20.1@sha256:76cc2074cb6642631f34a898ced71e6aeaa6b1a4d78c4daa743275a22e0c5be7
+        command: ["-path", "/migrations", "-database", "postgres://tolo_web_auth:${TOLO_WEB_AUTH_DB_PASSWORD:-tolo_web_auth}@web-auth-db:5432/tolo_web_auth?sslmode=disable", "up"]
+        volumes:
+            - web-auth-migrations:/migrations:ro
+        networks:
+            - web-auth-db
+        depends_on:
+            web-auth-db:
+                condition: service_healthy
+            web-auth-schema:
+                condition: service_completed_successfully
         restart: "no"
 
     web-auth-db:
@@ -37,13 +52,8 @@ services:
             POSTGRES_DB: tolo_web_auth
             POSTGRES_USER: tolo_web_auth
             POSTGRES_PASSWORD: ${TOLO_WEB_AUTH_DB_PASSWORD:-tolo_web_auth}
-        volumes:
-            - web-auth-schema:/docker-entrypoint-initdb.d:ro
         networks:
             - web-auth-db
-        depends_on:
-            web-auth-schema:
-                condition: service_completed_successfully
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
             interval: 5s
@@ -52,7 +62,7 @@ services:
             start_period: 5s
 
 volumes:
-    web-auth-schema:
+    web-auth-migrations:
 
 networks:
     web-auth-db:
