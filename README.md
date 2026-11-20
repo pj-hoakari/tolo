@@ -288,6 +288,7 @@ ingress がホストの 80 番を使うので、カメラの e2e のスタック
 | `task proposal` | runn の `integration-proposal.yml` で、Flow Control が迂回の提案を保存するまで計測値を送る |
 
 GitHub Actions の `E2E`（`.github/workflows/e2e.yml`）は、PR と `develop` への push のたびに、`compose.web.yml` を除いた構成で `task up`・`task fakeidp:up` を実行し、Gateway の `/readyz` を待ってから `task e2e` を実行する
+同じワークフローのジョブ `machine-session-e2e` は、`compose.web.yml` で固定したコミットの公開イメージ（`ghcr.io/pj-hoakari/tolo-web:sha-<コミット>`）を `TOLO_WEB_IMAGE` に渡して `task machine:e2e` を実行する
 
 ## ドキュメント
 

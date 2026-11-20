@@ -60,3 +60,38 @@ jobs:
               run: |
                   docker stop tolo-fakeidp || true
                   docker compose down -v
+
+    machine-session-e2e:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        env:
+            COMPOSE_FILE: compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml
+            COMPOSE_PROJECT_NAME: tolo-machine-session-e2e
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Set up Task
+              uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
+
+            - name: Use the published tolo-web image of the pinned commit
+              run: |
+                  set -euo pipefail
+                  tag="$(sed -n 's/.*TOLO_WEB_IMAGE:-tolo-web:\([0-9a-f]*\)}.*/\1/p' compose.web.yml)"
+                  test -n "${tag}"
+                  echo "TOLO_WEB_IMAGE=ghcr.io/pj-hoakari/tolo-web:sha-${tag}" >> "${GITHUB_ENV}"
+
+            - name: Build the Firebase Emulator
+              run: docker compose build firebase-emulator
+
+            - name: Run the machine session e2e
+              id: e2e
+              run: KEEP_STACK=1 task machine:e2e
+
+            - name: Dump service logs
+              if: failure() && steps.e2e.outcome == 'failure'
+              run: docker compose logs --no-color
+
+            - name: Stop services
+              if: always()
+              run: docker compose down -v --remove-orphans
