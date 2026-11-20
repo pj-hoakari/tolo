@@ -14,6 +14,10 @@ services:
             AUTH_IDP_CLIENT_ID: console-ui
             AUTH_IDP_CLIENT_SECRET: ${TOLO_IDP_CONSOLE_UI_CLIENT_SECRET:-console-secret}
             AUTH_RESOURCE_HOST: api.example.com
+            AUTH_IDP_CONNECTION_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_CONNECTION_REDIRECT_URI: http://tolo.localhost/api/auth/connection/callback
+            AUTH_IDP_MACHINE_CLIENT_SECRET: ${TOLO_IDP_SEED_CLIENT_SECRET:-secret}
+            AUTH_IDP_MACHINE_REDIRECT_URI: http://tolo.localhost/api/auth/machine/callback
         ports: !reset []
         networks:
             - web-auth-db

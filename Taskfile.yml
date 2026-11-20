@@ -94,6 +94,14 @@ tasks:
         cmds:
             - docker compose down --remove-orphans {{.CLI_ARGS}}
 
+    machine:e2e:
+        desc: Run the observation page machine session e2e on the real-IdP stack. Pass TOLO_WEB_IMAGE, or NPM_TOKEN to build tolo-web.
+        env:
+            COMPOSE_FILE: compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml
+            COMPOSE_PROJECT_NAME: tolo-machine-session-e2e
+        cmds:
+            - ./scripts/machine-session-e2e.sh
+
     e2e:concurrent:
         internal: true
         deps:
