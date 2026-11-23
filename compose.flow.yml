@@ -1,9 +1,9 @@
 services:
     flow-control:
-        image: ${TOLO_FLOW_IMAGE:-ghcr.io/pj-hoakari/tolo-flow-control:sha-36d8f3b}
+        image: ${TOLO_FLOW_IMAGE:-ghcr.io/pj-hoakari/tolo-flow-control:sha-e9e6cc7}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-flow-control.git#36d8f3b61a2236e5f88631c3261200412671d09b
+            context: https://github.com/pj-hoakari/tolo-flow-control.git#e9e6cc7d97b599a6c6c05a802c0aff4e61af9462
         environment:
             TOLO_GRAPH_MAX_NODES: "60"
             TOLO_GRAPH_MAX_EDGES: "150"
