@@ -8,6 +8,7 @@ PROJECT="${COMPOSE_PROJECT_NAME:-tolo-machine-session-e2e}"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.tm.yml:compose.idp.yml:compose.obs.yml:compose.edge.yml:compose.web.yml:compose.idp-web.yml}"
 
 IDP_URL="${IDP_URL:-http://auth.tolo.localhost}"
+GATEWAY_URL="${GATEWAY_URL:-http://localhost:18090}"
 ROOT_URL="${ROOT_URL:-http://tolo.localhost}"
 TENANT_URL="${TENANT_URL:-http://test.tolo.localhost}"
 TENANT_ID="${TOLO_TENANT_ID:-0123456789abcdef}"
@@ -224,6 +225,7 @@ compose up -d --wait \
     keygen server nats push-relay tenant-management \
     idp ingress observation firebase-emulator edge-bridge web
 wait_for "${IDP_URL}/oauth2/jwks" 'idp'
+wait_for "${GATEWAY_URL}/readyz" 'service gateway'
 wait_for "${TENANT_URL}/" 'web'
 staff_sub="$(IDP_BASE_URL="${IDP_URL}" IDP_TENANT_ID="${TENANT_ID}" \
     IDP_USERNAME="${IDP_USERNAME}" IDP_PASSWORD="${IDP_PASSWORD}" \
