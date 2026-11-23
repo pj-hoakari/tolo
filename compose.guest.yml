@@ -8,10 +8,10 @@ services:
             - guest
 
     guest:
-        image: ${TOLO_GUEST_IMAGE:-ghcr.io/pj-hoakari/tolo-guest:sha-4c58170}
+        image: ${TOLO_GUEST_IMAGE:-ghcr.io/pj-hoakari/tolo-guest:sha-63aaba4}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-guest.git#4c581707da39a6b37a852cb47c4a79b09970728e
+            context: https://github.com/pj-hoakari/tolo-guest.git#63aaba41d83c96230a0442d7bd50368379c028b9
         environment:
             DATABASE_URL: postgres://guest-db:5432/guest?sslmode=disable&user=guest&password=${TOLO_GUEST_DB_PASSWORD:-guest}
             INTERNAL_JWKS_URL: http://server:8080/.well-known/jwks.json
@@ -29,10 +29,10 @@ services:
                 condition: service_started
 
     guest-migrate:
-        image: ${TOLO_GUEST_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-guest-migrate:sha-4c58170}
+        image: ${TOLO_GUEST_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-guest-migrate:sha-63aaba4}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-guest.git#4c581707da39a6b37a852cb47c4a79b09970728e
+            context: https://github.com/pj-hoakari/tolo-guest.git#63aaba41d83c96230a0442d7bd50368379c028b9
             target: migrate
         command:
             - -database

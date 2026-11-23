@@ -12,10 +12,10 @@ services:
             - realtime-firebase
 
     realtime:
-        image: ${TOLO_RT_IMAGE:-ghcr.io/pj-hoakari/tolo-realtime:sha-823d6a3}
+        image: ${TOLO_RT_IMAGE:-ghcr.io/pj-hoakari/tolo-realtime:sha-1b75f5d}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-realtime.git#823d6a3d2aa949ca519e36941cc6ff6e3cb07546
+            context: https://github.com/pj-hoakari/tolo-realtime.git#1b75f5dca7b1134e7b2ea4b0a3cdd222ec60497f
         environment:
             DATABASE_URL: postgres://realtime-db:5432/realtime?sslmode=disable&user=realtime&password=${TOLO_RT_DB_PASSWORD:-realtime}
             FIRESTORE_PROJECT_ID: demo-tolo
@@ -36,10 +36,10 @@ services:
                 condition: service_started
 
     realtime-migrate:
-        image: ${TOLO_RT_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-realtime-migrate:sha-823d6a3}
+        image: ${TOLO_RT_MIGRATE_IMAGE:-ghcr.io/pj-hoakari/tolo-realtime-migrate:sha-1b75f5d}
         pull_policy: missing
         build:
-            context: https://github.com/pj-hoakari/tolo-realtime.git#823d6a3d2aa949ca519e36941cc6ff6e3cb07546
+            context: https://github.com/pj-hoakari/tolo-realtime.git#1b75f5dca7b1134e7b2ea4b0a3cdd222ec60497f
             target: migrate
         command:
             - -database
