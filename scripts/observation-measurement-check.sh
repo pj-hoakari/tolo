@@ -80,16 +80,24 @@ expect 200
 
 printf '\n# 2. an edge device registered with Observation\n'
 call tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice \
-    "$(jq -nc --arg e "${event_id}" '{eventId: $e, name: "gate-counter", observationPointNames: ["gate"]}')" \
+    "$(jq -nc --arg e "${event_id}" '{eventId: $e, name: "gate-counter"}')" \
     "${manage_token}"
 expect 200
 device_id="$(printf '%s' "${body}" | jq -r '.device.edgeDeviceId')"
-point_id="$(printf '%s' "${body}" | jq -r '.device.observationPoints[0].observationPointId')"
 printf '%s' "${body}" | jq -e '.observationPagePath | type == "string" and length > 0' >/dev/null \
     || { printf 'RegisterEdgeDevice did not return observationPagePath\n' >&2; exit 1; }
 
-printf '\n# 3. Heartbeat and ReportMeasurements from the device\n'
 report_token="$(token -k event_access -b "${OWNER_SUB}" -t "${tenant_id}" -e "${event_id}" -s 'events.report')"
+add_point() {
+    call tolo.observation.v1.EdgeDeviceService/AddObservationPoint \
+        "$(jq -nc --arg e "${event_id}" --arg d "$1" --arg n "$2" '{eventId: $e, edgeDeviceId: $d, name: $n}')" \
+        "${report_token}"
+    expect 200
+}
+add_point "${device_id}" gate
+point_id="$(printf '%s' "${body}" | jq -r '.point.observationPointId')"
+
+printf '\n# 3. Heartbeat and ReportMeasurements from the device\n'
 call tolo.observation.v1.EdgeDeviceService/Heartbeat \
     "$(jq -nc --arg e "${event_id}" --arg d "${device_id}" --arg p "${point_id}" '{eventId: $e, edgeDeviceId: $d, activeObservationPointIds: [$p]}')" \
     "${report_token}"
@@ -136,11 +144,15 @@ printf '%s' "${body}" | jq -e '.settings.historyWindowDays == 14 and .settings.e
 
 printf '\n# 7. Observation averages the points of one route and leaves out a point that stopped reporting\n'
 call tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice \
-    "$(jq -nc --arg e "${event_id}" '{eventId: $e, name: "gate-pair", observationPointNames: ["gate-a", "gate-b", "hall-a", "hall-b"]}')" \
+    "$(jq -nc --arg e "${event_id}" '{eventId: $e, name: "gate-pair"}')" \
     "${manage_token}"
 expect 200
 pair_device_id="$(printf '%s' "${body}" | jq -r '.device.edgeDeviceId')"
-pair_points="$(printf '%s' "${body}" | jq -c '[.device.observationPoints[] | {key: .name, value: .observationPointId}] | from_entries')"
+pair_points='{}'
+for name in gate-a gate-b hall-a hall-b; do
+    add_point "${pair_device_id}" "${name}"
+    pair_points="$(printf '%s' "${body}" | jq -c --argjson p "${pair_points}" --arg n "${name}" '$p + {($n): .point.observationPointId}')"
+done
 pair_point() { printf '%s' "${pair_points}" | jq -r --arg n "$1" '.[$n]'; }
 
 for pair in gate-a:routeId:gate-hall gate-b:routeId:gate-hall hall-a:pointId:hall hall-b:pointId:hall; do

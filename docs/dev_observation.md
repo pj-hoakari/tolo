@@ -31,10 +31,10 @@ PostgreSQL のパスワードは `TOLO_OBS_DB_PASSWORD` で変えられる（既
 ## 確認の流れ
 
 `scripts/observation-measurement-check.sh` は、テナントの作成・所有権の取得・イベント作成・グラフの保存と公開を公開用 listener 越しに行う  
-続けて端末を登録し、その端末として `Heartbeat` と `ReportMeasurements` を呼ぶ  
+続けて端末を観測点の名前なしで登録し、`events.report` のトークンで `AddObservationPoint` を呼んで観測点を足し、その端末として `Heartbeat` と `ReportMeasurements` を呼ぶ  
 Gateway の監査ログを `docker compose logs` で読み、Observation からの GraphSupply 呼び出しが成功したことを確かめる  
 続けて `event_access` トークン（scope `events.read events.manage`）で `UpdateObservationSettings` と `GetObservationSettings` を公開用 listener 越しに呼び、保存した設定値が返ることを確かめる  
-最後に観測点を 4 つ持つ端末を登録し、2 つずつルート `gate-hall` とポイント `hall` に紐づけて公開し直す。`gate-hall` の 2 つには今の窓の計測を、`hall` には 1 つに今の窓の計測、もう 1 つに 5 分前に止まった計測を送る。`GetEventOverview` の観測スナップショットで、`gate-hall` が 2 つの平均になり、`hall` が止まった観測点を除いた値で欠測にならないことを確かめる（hoakari-root ADR-0134）  
+最後に端末をもう 1 つ登録して観測点を 4 つ足し、2 つずつルート `gate-hall` とポイント `hall` に紐づけて公開し直す。`gate-hall` の 2 つには今の窓の計測を、`hall` には 1 つに今の窓の計測、もう 1 つに 5 分前に止まった計測を送る。`GetEventOverview` の観測スナップショットで、`gate-hall` が 2 つの平均になり、`hall` が止まった観測点を除いた値で欠測にならないことを確かめる（hoakari-root ADR-0134）  
 想定と違うステータスが返った段階で失敗する
 
 監査ログを読むため、compose の指定は環境変数で渡す
@@ -46,7 +46,8 @@ COMPOSE_PROJECT_NAME=toloobscheck COMPOSE_FILE=compose.yml:compose.tm.yml:compos
 
 | 段階 | 結果 |
 | --- | --- |
-| `RegisterEdgeDevice` | `200`。`edgeDeviceId` と観測点の `observationPointId` |
+| `RegisterEdgeDevice` | `200`。`edgeDeviceId` |
+| `AddObservationPoint` | `200`。観測点の `observationPointId` |
 | `Heartbeat` | `200` |
 | `ReportMeasurements` | `200`。`acceptedCount` が `1` |
 | 監査ログの `GetCurrentRevision`・`GetObservationPointMappings`・`GetQrLocations` | `caller_service=tolo-observation` の記録が `http_status=200` |

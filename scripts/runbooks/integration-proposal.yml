@@ -50,7 +50,7 @@ steps:
         token: "{{ steps.reportToken.res.body.access_token }}"
         eventId: "{{ steps.seed.steps.createEvent.res.body.event.eventId }}"
         edgeDeviceId: "{{ steps.seed.steps.registerEdgeDevice.res.body.device.edgeDeviceId }}"
-        observationPoints: "{{ steps.seed.steps.registerEdgeDevice.res.body.device.observationPoints }}"
+        observationPoints: "{{ steps.seed.steps.observationPoints.res.body.observationPoints }}"
   proposal:
     db:
       query: |
