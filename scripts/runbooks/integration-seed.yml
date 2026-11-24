@@ -119,10 +119,47 @@ steps:
             application/json:
               eventId: "{{ steps.createEvent.res.body.event.eventId }}"
               name: venue-counter
-              observationPointNames: "{{ map(vars.edges, .edgeId) }}"
+    test: current.res.status == 200
+  reportToken:
+    idp:
+      /token:
+        post:
+          body:
+            application/json:
+              token_use: event_access
+              sub: "{{ vars.ownerSub }}"
+              client_id: "{{ vars.clientId }}"
+              tenant_id: "{{ steps.startTenant.res.body.tenant.tenantId }}"
+              event_id: "{{ steps.createEvent.res.body.event.eventId }}"
+              scope: events.report
+    test: current.res.status == 200
+  addObservationPoints:
+    loop:
+      count: len(vars.edges)
+    gw:
+      /tolo.observation.v1.EdgeDeviceService/AddObservationPoint:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.reportToken.res.body.access_token }}"
+          body:
+            application/json:
+              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
+              edgeDeviceId: "{{ steps.registerEdgeDevice.res.body.device.edgeDeviceId }}"
+              name: "{{ vars.edges[i].edgeId }}"
+    test: current.res.status == 200
+  observationPoints:
+    gw:
+      /tolo.observation.v1.EdgeDeviceService/ListEdgeDeviceObservationPoints:
+        post:
+          headers:
+            Authorization: "Bearer {{ steps.reportToken.res.body.access_token }}"
+          body:
+            application/json:
+              eventId: "{{ steps.createEvent.res.body.event.eventId }}"
+              edgeDeviceId: "{{ steps.registerEdgeDevice.res.body.device.edgeDeviceId }}"
     test: |
       current.res.status == 200
-      && len(current.res.body.device.observationPoints) == len(vars.edges)
+      && len(current.res.body.observationPoints) == len(vars.edges)
   mapObservationPoints:
     loop:
       count: len(vars.edges)
@@ -135,9 +172,9 @@ steps:
             application/json:
               eventId: "{{ steps.createEvent.res.body.event.eventId }}"
               mapping:
-                observationPointId: "{{ steps.registerEdgeDevice.res.body.device.observationPoints[i].observationPointId }}"
+                observationPointId: "{{ steps.observationPoints.res.body.observationPoints[i].observationPointId }}"
                 anchor:
-                  routeId: "{{ steps.registerEdgeDevice.res.body.device.observationPoints[i].name }}"
+                  routeId: "{{ steps.observationPoints.res.body.observationPoints[i].name }}"
     test: current.res.status == 200
   publishRevision:
     gw:
@@ -156,5 +193,5 @@ steps:
         "eventId": steps.createEvent.res.body.event.eventId,
         "edgeDeviceId": steps.registerEdgeDevice.res.body.device.edgeDeviceId,
         "observationPagePath": steps.registerEdgeDevice.res.body.observationPagePath,
-        "observationPoints": map(steps.registerEdgeDevice.res.body.device.observationPoints, { {"observationPointId": .observationPointId, "routeId": .name} })
+        "observationPoints": map(steps.observationPoints.res.body.observationPoints, { {"observationPointId": .observationPointId, "routeId": .name} })
       }

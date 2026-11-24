@@ -247,6 +247,14 @@ wait_for_web() {
     die "tolo-web did not become ready: ${WEB_URL}"
 }
 
+add_point() {
+    call POST "${GATEWAY_URL}/tolo.observation.v1.EdgeDeviceService/AddObservationPoint" \
+        -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer ${report_token}" \
+        -d "$(jq -nc --arg e "${EVENT_ID}" --arg d "$1" --arg n "$2" '{eventId: $e, edgeDeviceId: $d, name: $n}')"
+    expect_status 200 "AddObservationPoint($2)"
+}
+
 idp_token() {
     IDP_BASE_URL="${IDP_URL}" \
     IDP_TENANT_ID="${TENANT_ID}" \
@@ -369,6 +377,8 @@ assert_claim "${event_token}" event_id "${EVENT_ID}"
 assert_claim "${event_token}" client_id "${IDP_CLIENT_ID}"
 printf '  tenant_access: token_use=tenant_access tenant_id=%s client_id=%s\n' "${TENANT_ID}" "${IDP_CLIENT_ID}"
 printf '  event_access:  token_use=event_access event_id=%s scope=%s\n' "${EVENT_ID}" "$(claim "${event_token}" scope)"
+report_token="$(idp_token -s 'openid tenant.read events.report' -e "${EVENT_ID}")"
+[ -n "${report_token}" ] || die 'event_access with events.report is empty'
 recreate_web "${staff_token}" "${event_token}"
 
 step '2. register an observation page, its point, and a linked camera'
@@ -377,13 +387,14 @@ call POST "${GATEWAY_URL}/tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevi
     -H "Authorization: Bearer ${event_token}" \
     -d "$(jq -nc --arg e "${EVENT_ID}" '{
         eventId: $e,
-        name: "camera-e2e-page",
-        observationPointNames: ["camera-e2e-point", "camera-e2e-other-point"]
+        name: "camera-e2e-page"
     }')"
 expect_status 200 'RegisterEdgeDevice(page)'
 page_id="$(printf '%s' "${body}" | jq -r '.device.edgeDeviceId')"
-point_id="$(printf '%s' "${body}" | jq -r '.device.observationPoints[] | select(.name == "camera-e2e-point") | .observationPointId')"
 [ -n "${page_id}" ] && [ "${page_id}" != "null" ] || die 'page edge_device_id is empty'
+add_point "${page_id}" camera-e2e-point
+point_id="$(printf '%s' "${body}" | jq -r '.point.observationPointId')"
+add_point "${page_id}" camera-e2e-other-point
 [ -n "${point_id}" ] && [ "${point_id}" != "null" ] || die 'observation point is empty'
 printf '  page edge_device_id=%s observation point=%s\n' "${page_id}" "${point_id}"
 
@@ -412,12 +423,12 @@ call POST "${GATEWAY_URL}/tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevi
     -H "Authorization: Bearer ${event_token}" \
     -d "$(jq -nc --arg e "${EVENT_ID}" '{
         eventId: $e,
-        name: "camera-e2e-other-page",
-        observationPointNames: ["camera-e2e-other-page-point"]
+        name: "camera-e2e-other-page"
     }')"
 expect_status 200 'RegisterEdgeDevice(other page)'
 other_page_id="$(printf '%s' "${body}" | jq -r '.device.edgeDeviceId')"
-other_page_point_id="$(printf '%s' "${body}" | jq -r '.device.observationPoints[0].observationPointId')"
+add_point "${other_page_id}" camera-e2e-other-page-point
+other_page_point_id="$(printf '%s' "${body}" | jq -r '.point.observationPointId')"
 call POST "${GATEWAY_URL}/tolo.observation.v1.EdgeDeviceService/RegisterEdgeDevice" \
     -H 'Content-Type: application/json' \
     -H "Authorization: Bearer ${event_token}" \

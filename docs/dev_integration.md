@@ -56,9 +56,10 @@ runbook は次の 4 つに分かれる
 1. テナントの作成と所有権の取得
 2. イベントの作成
 3. `SaveGraph`
-4. `RegisterEdgeDevice`（ルートごとに観測点を 1 つ、計 7 つ）
-5. `MapObservationPoint`（各観測点を `anchor.routeId` で同名のルートに紐づける）
-6. `PublishRevision`
+4. `RegisterEdgeDevice`（観測点の名前なし）
+5. `AddObservationPoint`（`events.report` のトークンで、ルートごとに観測点を 1 つ、計 7 つ）と `ListEdgeDeviceObservationPoints`
+6. `MapObservationPoint`（各観測点を `anchor.routeId` で同名のルートに紐づける）
+7. `PublishRevision`
 
 観測点の紐づけは公開した版に含まれ、Observation は公開済みの版の紐づけだけを読む（ADR-0083）  
 `PublishRevision` を `MapObservationPoint` より先に呼ぶと、公開した版に紐づけが無く、Flow Control へ送る観測が空になって提案は出ない
