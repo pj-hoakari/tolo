@@ -28,7 +28,7 @@ services:
                 condition: service_started
 
     web-auth-schema:
-        image: ${TOLO_WEB_IMAGE:-tolo-web:d3ae52e}
+        image: ${TOLO_WEB_IMAGE:-tolo-web:bc652f7}
         user: "0"
         command: ["cp", "-R", "/app/db/migrations/.", "/migrations"]
         volumes:

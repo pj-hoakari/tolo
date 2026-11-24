@@ -249,7 +249,7 @@ BFF に渡す `tenant_access` と `event_access` は、スクリプトが実物�
 ```bash
 task down
 task fakeidp:down
-TOLO_WEB_IMAGE=ghcr.io/pj-hoakari/tolo-web:sha-d3ae52e task machine:e2e
+TOLO_WEB_IMAGE=ghcr.io/pj-hoakari/tolo-web:sha-bc652f7 task machine:e2e
 ```
 
 `TOLO_WEB_IMAGE` を渡さないときは、`compose.web.yml` の固定コミットから `NPM_TOKEN` でビルドする
