@@ -254,7 +254,7 @@ esac
 
 step '2. register an observation page and call a console procedure as staff'
 rpc observation/registerEdgeDevice "$(jq -nc --arg e "${EVENT_ID}" \
-    '{eventId: $e, name: "machine-session-e2e-page", observationPointNames: ["machine-session-e2e-point"]}')"
+    '{eventId: $e, name: "machine-session-e2e-page"}')"
 [ "${status}" = "200" ] || die "registerEdgeDevice: expected HTTP 200, got ${status}"
 page_id="$(printf '%s' "${body}" | jq -r '.json.device.edgeDeviceId // empty')"
 [ -n "${page_id}" ] || die 'registerEdgeDevice returned no edge_device_id'
